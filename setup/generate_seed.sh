@@ -156,12 +156,12 @@ cat > "$HOME_DIR/quiz1/README.txt" <<'EOF'
   Oddiy 'ls' buyrug'i nuqta (.) bilan boshlanadigan yashirin fayl
   va papkalarni ko'rsatmaydi.
   Ushbu katalogda bir nechta yashirin zaxira va ma'lumot papkalari mavjud.
+  Sizga xavfsizlik auditi saqlanadigan audit papkasi — (.audit*) kerak!
 
-  1) Barcha yashirin papkalarni ko'ring.
-  2) Ularning orasidan xavfsizlik auditi (audit) saqlanadigan
-     yashirin papkani aniqlang va uning ichiga kiring.
-  3) Ichidagi yashirin audit jurnalining oxirgi qismini o'qib,
-     undagi maxfiy FLAG{...} ni toping.
+  1) Barcha yashirin papkalarni ko'ring (ls -la).
+  2) .audit* papkasi ichiga kiring.
+  3) Ichidagi tizim auditi jurnalining (.system_audit*) oxirgi qismini
+     o'qib, undagi maxfiy FLAG{...} ni toping.
   4) Topilgan flagni 'flag.txt' fayliga saqlang va 'check' buyrug'ini bering.
 
 💡 Buyruqlar sintaksisi va ma'lumot:
@@ -237,11 +237,10 @@ cat > "$HOME_DIR/quiz2/README.txt" <<'EOF'
 
 📝 Vazifa:
   Ushbu katalogda bir nechta yashirin jurnallar (.log fayllar) mavjud.
-  Xavfsizlik tizimi xakerlik urinishlari orasida faqat bitta seansga
-  maxsus ruxsat bergan ('FLAG_GRANTED' holati) va uning maxfiy
-  tokeniga flag yozib qo'yilgan.
+  Sizga serverga kirish oqimi qayd etilgan access stream — (.access*) jurnali kerak!
+  Ushbu logda muvaffaqiyatli kirish ('FLAG_GRANTED') va uning xavfsizlik tokeni bor.
 
-  1) Yashirin log fayllarni ko'ring va tegishli kirish jurnalini aniqlang.
+  1) Yashirin log fayllarni ko'ring (ls -la) va .access* jurnalini aniqlang.
   2) Muvaffaqiyatli kirish ('FLAG_GRANTED') qatorini qidirib toping.
   3) Ustun ajratuvchi belgilar (| va =) bo'yicha faqat 'FLAG{...}'
      qiymatini ajratib oling.
@@ -323,11 +322,11 @@ cat > "$HOME_DIR/quiz3/README.txt" <<'EOF'
 
 📝 Vazifa:
   Ushbu katalogda bir nechta yashirin telemetriya va tarmoq oqimlari mavjud.
-  Ularning ko'pchiligida shovqinli qatorlar o'nlab martadan takrorlangan.
-  Biroq, telemetriya oqimlari orasida FAQAT BIR DANA NOYOB (UNIKAL) qator
-  bor — aynan u siz qidirayotgan maxfiy flagdir!
+  Sizga datchiklar telemetriyasi — sensor telemetry (.sensor*) fayli kerak!
+  Ushbu faylda shovqinli qatorlar takrorlangan, ammo FAQAT BIR DANA
+  NOYOB (UNIKAL) qator bor — u siz qidirayotgan maxfiy flagdir!
 
-  1) Yashirin fayllarni ko'zdan kechiring.
+  1) Yashirin fayllarni ko'ring (ls -la) va .sensor* faylini aniqlang.
   2) Saralash va noyob qatorlarni ajratish buyruqlari yordamida
      faqat 1 marta uchragan (takrorlanmagan) qatorni aniqlang.
   3) Flagni 'flag.txt' fayliga saqlang va 'check' buyrug'ini bering.
@@ -395,9 +394,11 @@ cat > "$HOME_DIR/quiz4/README.txt" <<'EOF'
   biriga ruxsatsiz maxfiy auditi kalitini ('AUDIT_BACKDOOR_KEY') kiritgan.
 
   Fayllar yuzlab qatordan iborat bo'lgani sababli ularni qo'lda ko'rib bo'lmaydi.
-  1) Yashirin zaxira nusxalarini toping.
-  2) Fayllarni solishtirish vositalari (diff yoki comm) yordamida
-     haqiqiy production zaxirasidagi maxsus farqni aniqlang.
+  Sizga asosiy production zaxirasi — (.firewall_production*) fayli kerak!
+
+  1) Yashirin zaxira nusxalarini ko'ring (ls -la) va production zaxirasini aniqlang.
+  2) Fayllarni solishtirish vositasi (diff) yordamida firewall.conf va
+     ushbu production zaxirasi orasidagi qo'shilgan maxsus qatorni aniqlang.
   3) Qo'shilgan maxfiy flagni 'flag.txt' ga saqlang va 'check' qiling.
 
 💡 Buyruqlar sintaksisi va ma'lumot:
@@ -460,14 +461,13 @@ cat > "$HOME_DIR/quiz5/README.txt" <<'EOF'
 
 📝 Vazifa:
   Ushbu katalogda bir nechta yashirin tizim ma'lumotlar ro'yxatlari (.db fayllar) bor.
-  Ularning ichida maxfiy ro'yxat (classified registry) mavjud bo'lib, unda
-  xodimlar va ularning maxfiy tokenlari saqlanadi.
+  Sizga maxfiy xavfsizlik registri — classified registry (.classified*) fayli kerak!
+  Undagi xodimlar va ularning maxfiy tokenlari saqlanadi.
 
-  1) Yashirin fayllarni toping va 'column' buyrug'i orqali ularni
-     tartibli jadval shaklida o'qing.
-  2) Maxfiy xavfsizlik akkauntining niqoblangan kalitini toping:
-     U 'MASKEDFLAG--...' ko'rinishida berkitilgan.
-  3) Ushbu matnni 'sed' yordamida to'g'ri FLAG formatiga keltiring:
+  1) Yashirin fayllarni ko'ring (ls -la) va .classified* faylini aniqlang.
+  2) 'column -t -s\':\'' buyrug'i orqali ushbu faylni tartibli jadval shaklida o'qing.
+  3) Undagi 'MASKEDFLAG--...' niqoblangan kalitini toping.
+  4) Ushbu matnni 'sed' yordamida to'g'ri FLAG formatiga keltiring:
      - 'MASKEDFLAG--' so'zini 'FLAG{' ga almashtirish
      - Barcha '--' belgilarini '_' (pastki chiziq) ga almashtirish
      - Oxiridagi '==' belgisini '}' ga almashtirish
@@ -734,10 +734,9 @@ cat > "$HOME_DIR/quiz9/README.txt" <<'EOF'
   ('dpkg -i' qilib tizimga zarar yetkazishi mumkin), avval ularning
   ichki tarkibini inspeksiya qilishi zarur.
 
-  1) Yashirin deb paketlarni ko'ring.
-  2) Paketlarning ichki fayllar ro'yxatini ko'zdan kechirib, aynan
-     xavfsizlik to'plami (sec suite) paketini aniqlang.
-  3) Ushbu paketni alohida katalogga oching (extract).
+  1) Yashirin deb paketlarni ko'ring (ls -la) va xavfsizlik to'plami (.ctf-sec*) paketini aniqlang.
+  2) 'dpkg -c' bilan paketning ichki fayllar ro'yxatini ko'rib chiqing.
+  3) Ushbu paketni alohida katalogga oching ('dpkg -x').
   4) Ichidagi litsenziya/faollashtirish faylidan flagni o'qib,
      'flag.txt' ga saqlang va 'check' buyrug'ini bering.
 
@@ -812,13 +811,12 @@ cat > "$HOME_DIR/quiz10/README.txt" <<'EOF'
   master sinovga yetib keldingiz.
   Ushbu katalogda bir nechta yashirin arxivlar (.tar.gz) mavjud.
 
-  1) Yashirin arxivlarni ko'ring va kiberhodisa tergoviga
-     (incident investigation) tegishli arxivni oching.
-  2) Ochilgan 'incident' papkasi ichidagi 'security_events.csv'
+  1) Yashirin arxivlarni ko'ring (ls -la) va kiberhodisa tergovi (.incident*) arxivini aniqlang.
+  2) Arxivni oching ('tar -xzf').
+  3) Ochilgan 'incident' papkasi ichidagi 'security_events.csv'
      jadvalini tahlil qiling.
-  3) Jadvaldagi yuzlab normal hodisalar orasidan status ustuni
-     'CRITICAL_BREACH' bo'lgan yagona jiddiy hodisani toping.
-  4) 'awk' va boshqa ko'nikmalaringiz yordamida ushbu qatorning
+  4) Jadvaldagi normal hodisalar orasidan status ustuni
+     'CRITICAL_BREACH' bo'lgan qatorni 'awk' yordamida topib,
      oxirgi ustunidagi yakuniy g'alaba flagini ajratib oling!
   5) Flagni 'flag.txt' ga saqlang va 'check' buyrug'ini bering.
 
