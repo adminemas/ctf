@@ -1,6 +1,9 @@
 #!/bin/bash
 # /usr/local/bin/status
-# Talabaning joriy holati, topshirilgan flaglar va progress barini ko'rsatadi.
+# Talabaning joriy holati va yo'nalishini ixcham ko'rsatadi.
+
+# getcwd xatolarining oldini olish uchun
+cd "/home/${SUDO_USER:-$(whoami)}" 2>/dev/null || cd /tmp
 
 if [ "$EUID" -ne 0 ]; then
     exec sudo /usr/local/bin/status "$@"
@@ -35,57 +38,79 @@ TOTAL_FAIL=$(db_query "SELECT COUNT(*) FROM attempts WHERE username='$USERNAME' 
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════════════╗"
-printf "║  📊 LINUX PRAKTIKUM CTF — Holat: %-31s ║\n" "$USERNAME"
+printf "║  📊 CTF HOLAT: %-49s ║\n" "$USERNAME"
 echo "╠══════════════════════════════════════════════════════════════════╣"
 
 if [ "$STAGE" -gt 10 ]; then
     FLAG=$(db_query "SELECT flag FROM flags WHERE username='$USERNAME';")
     echo "║  🏆 BARCHA 10 TA QUIZ MUVAFFAQIYATLI YAKUNLANDI!                 ║"
-    printf "║  ✅ Urinishlar: ✓%-4s ✗%-4s                                    ║\n" "$TOTAL_PASS" "$TOTAL_FAIL"
+    printf "║  ✅ Natija: %-2s ta flag topildi (✗%-2s xato)                       ║\n" "$TOTAL_PASS" "$TOTAL_FAIL"
     echo "╠══════════════════════════════════════════════════════════════════╣"
     echo "║  🚩 Sizning Yakuniy Flagingiz:                                   ║"
     printf "║  %-64s ║\n" "$FLAG"
     echo "╚══════════════════════════════════════════════════════════════════╝"
-else
-    DONE=$((STAGE - 1))
-    REMAIN=$((10 - DONE))
-    BAR="["
-    for ((i=0; i<DONE; i++)); do BAR="${BAR}█"; done
-    for ((i=0; i<REMAIN; i++)); do BAR="${BAR}░"; done
-    BAR="${BAR}]"
-    PCT=$((DONE * 10))
+    echo ""
+    exit 0
+fi
 
-    printf "║  📍 Bosqich: quiz%-2s / 10                                        ║\n" "$STAGE"
-    printf "║  Progress:   %-12s %3s%%                                  ║\n" "$BAR" "$PCT"
-    printf "║  Urinishlar: ✓%-4s ✗%-4s                                        ║\n" "$TOTAL_PASS" "$TOTAL_FAIL"
+# Bosqichlar bo'yicha qisqa mavzu va tavsif
+case $STAGE in
+    1) THEME="ls -la, cd, cat, head, tail"
+       DESC="Yashirin papkalar va audit logi tahlili" ;;
+    2) THEME="grep, cut, pipes (|)"
+       DESC="Yashirin loglardan maxsus kirish tokenini ajratish" ;;
+    3) THEME="sort, uniq, pipes (|)"
+       DESC="Shovqinli oqimlar orasidan yagona unikal flagni topish" ;;
+    4) THEME="diff, comm"
+       DESC="Konfiguratsiya zaxiralaridagi maxfiy o'zgarishni topish" ;;
+    5) THEME="sed, column"
+       DESC="Niqoblangan kalitni sed bilan FLAG formatiga keltirish" ;;
+    6) THEME="find, chmod, chown"
+       DESC="Qulflangan (000) yashirin faylni topish va o'qish" ;;
+    7) THEME="git (log, show, diff)"
+       DESC="Git tarixidagi o'chirilgan maxfiy commitni tiklash" ;;
+    8) THEME="crontab, at"
+       DESC="Rejalashtirilgan cron jadvalidan flagni ajratish" ;;
+    9) THEME="dpkg, apt"
+       DESC="Debian paketini o'rnatmasdan ichini ko'rish va ochish" ;;
+   10) THEME="tar, awk, cut (Master)"
+       DESC="Kiberhodisa CSV jadvalini tahlil qilib flagni olish" ;;
+    *) THEME="Linux"
+       DESC="Joriy topshiriq" ;;
+esac
+
+DONE=$((STAGE - 1))
+REMAIN=$((10 - DONE))
+BAR="["
+for ((i=0; i<DONE; i++)); do BAR="${BAR}█"; done
+for ((i=0; i<REMAIN; i++)); do BAR="${BAR}░"; done
+BAR="${BAR}]"
+PCT=$((DONE * 10))
+
+printf "║  📍 Bosqich:      quiz%-2s / 10  %-10s %3s%%                    ║\n" "$STAGE" "$BAR" "$PCT"
+printf "║  🎯 Mavzu:        %-46s ║\n" "$THEME"
+printf "║  📝 Vazifa:       %-46s ║\n" "$DESC"
+printf "║  📊 Urinishlar:   ✓%-3s  ✗%-3s                                      ║\n" "$TOTAL_PASS" "$TOTAL_FAIL"
+echo "╠══════════════════════════════════════════════════════════════════╣"
+echo "║  🚀 TOPSHIRIQNI KO'RISH:                                         ║"
+printf "║     cd ~/quiz%-2s                                                  ║\n" "$STAGE"
+printf "║     cat README.txt                                               ║\n"
+echo "║                                                                  ║"
+echo "║  ✅ FLAGNI TEKSHIRISH:                                           ║"
+echo "║     check                                                        ║"
+echo "║     (yoki: check FLAG{...})                                      ║"
+
+# Agar oldingi topilgan flaglar bo'lsa, ixcham ko'rsatish
+SOLVED_COUNT=$(db_query "SELECT COUNT(*) FROM solved_stages WHERE username='$USERNAME';")
+if [ "$SOLVED_COUNT" -gt 0 ]; then
     echo "╠══════════════════════════════════════════════════════════════════╣"
     echo "║  🏁 TOP SHIRILGAN FLAGLAR:                                       ║"
-
-    # Oldingi bosqichlarda topilgan flaglarni chiqarish
-    SOLVED_COUNT=0
     while IFS='|' read -r s_stage s_flag; do
         if [ -n "$s_stage" ]; then
             printf "║   quiz%-2s: %-52s ║\n" "$s_stage" "$s_flag"
-            SOLVED_COUNT=$((SOLVED_COUNT + 1))
         fi
     done < <(sqlite3 -cmd ".timeout 5000" "$DB" "SELECT stage, flag FROM solved_stages WHERE username='$USERNAME' ORDER BY stage ASC;")
-
-    if [ "$SOLVED_COUNT" -eq 0 ]; then
-        echo "║   (Hozircha flaglar yo'q. Birinchi bosqichni bajaring!)         ║"
-    fi
-
-    echo "╠══════════════════════════════════════════════════════════════════╣"
-    echo "║  📋 JORIY VAZIFA QO'LLANMASI:                                    ║"
-    echo "╚══════════════════════════════════════════════════════════════════╝"
-    echo ""
-
-    README_FILE="/home/$USERNAME/quiz${STAGE}/README.txt"
-    if [ -f "$README_FILE" ]; then
-        if [ -L "$README_FILE" ]; then
-            echo "⚠️ README.txt fayli symlink bo'lishi mumkin emas."
-        else
-            sudo -u "$USERNAME" cat "$README_FILE" 2>/dev/null
-        fi
-    fi
 fi
+
+echo "╚══════════════════════════════════════════════════════════════════╝"
 echo ""

@@ -27,6 +27,12 @@ lock_dir() {
     chown root:root "$1"
 }
 
+clean_quiz_dir() {
+    local d="$1"
+    mkdir -p "$d"
+    find "$d" -mindepth 1 -delete 2>/dev/null || true
+}
+
 gen_salt() {
     local stage=$1
     echo -n "${USERNAME}:${SECRET}:stage${stage}" | sha256sum | cut -c1-10
@@ -116,7 +122,7 @@ chown "$USERNAME:$USERNAME" "$HOME_DIR/ROADMAP.txt"
 # ==========================================
 # QUIZ 1: ls -la, cd, cat, head, tail
 # ==========================================
-rm -rf "$HOME_DIR/quiz1"
+clean_quiz_dir "$HOME_DIR/quiz1"
 mkdir -p "$HOME_DIR/quiz1/.backup_vault"
 mkdir -p "$HOME_DIR/quiz1/.temp_cache"
 mkdir -p "$HOME_DIR/quiz1/.audit_vault"
@@ -182,7 +188,7 @@ chmod 750 "$HOME_DIR/quiz1"
 # ==========================================
 # QUIZ 2: grep, cut, pipes (|)
 # ==========================================
-rm -rf "$HOME_DIR/quiz2"
+clean_quiz_dir "$HOME_DIR/quiz2"
 mkdir -p "$HOME_DIR/quiz2"
 
 # Chalg'ituvchi 1: FTP jurnali
@@ -262,7 +268,7 @@ lock_dir "$HOME_DIR/quiz2"
 # ==========================================
 # QUIZ 3: sort, uniq, pipes (|)
 # ==========================================
-rm -rf "$HOME_DIR/quiz3"
+clean_quiz_dir "$HOME_DIR/quiz3"
 mkdir -p "$HOME_DIR/quiz3"
 
 # Chalg'ituvchi 1: traffic_a (barchasi takrorlangan)
@@ -348,7 +354,7 @@ lock_dir "$HOME_DIR/quiz3"
 # ==========================================
 # QUIZ 4: diff, comm
 # ==========================================
-rm -rf "$HOME_DIR/quiz4"
+clean_quiz_dir "$HOME_DIR/quiz4"
 mkdir -p "$HOME_DIR/quiz4"
 
 # Asl fayl
@@ -415,7 +421,7 @@ lock_dir "$HOME_DIR/quiz4"
 # ==========================================
 # QUIZ 5: sed, column (cumm)
 # ==========================================
-rm -rf "$HOME_DIR/quiz5"
+clean_quiz_dir "$HOME_DIR/quiz5"
 mkdir -p "$HOME_DIR/quiz5"
 
 # Chalg'ituvchi 1
@@ -487,7 +493,7 @@ lock_dir "$HOME_DIR/quiz5"
 # ==========================================
 # QUIZ 6: find, chmod, chown
 # ==========================================
-rm -rf "$HOME_DIR/quiz6"
+clean_quiz_dir "$HOME_DIR/quiz6"
 mkdir -p "$HOME_DIR/quiz6/backup_storage/logs/2026"
 mkdir -p "$HOME_DIR/quiz6/backup_storage/db/archive"
 mkdir -p "$HOME_DIR/quiz6/backup_storage/conf/active"
@@ -549,7 +555,7 @@ lock_dir "$HOME_DIR/quiz6"
 # ==========================================
 # QUIZ 7: git (log, show, diff)
 # ==========================================
-rm -rf "$HOME_DIR/quiz7"
+clean_quiz_dir "$HOME_DIR/quiz7"
 mkdir -p "$HOME_DIR/quiz7/company-api"
 
 (
@@ -613,7 +619,7 @@ lock_dir "$HOME_DIR/quiz7"
 # ==========================================
 # QUIZ 8: crontab, at
 # ==========================================
-rm -rf "$HOME_DIR/quiz8"
+clean_quiz_dir "$HOME_DIR/quiz8"
 mkdir -p "$HOME_DIR/quiz8"
 
 # Haqiqiy crontab o'rnatish
@@ -675,7 +681,7 @@ lock_dir "$HOME_DIR/quiz8"
 # ==========================================
 # QUIZ 9: dpkg, apt
 # ==========================================
-rm -rf "$HOME_DIR/quiz9"
+clean_quiz_dir "$HOME_DIR/quiz9"
 mkdir -p "$HOME_DIR/quiz9"
 
 make_deb() {
@@ -755,7 +761,7 @@ lock_dir "$HOME_DIR/quiz9"
 # ==========================================
 # QUIZ 10: tar, awk, cut (Master Incident Investigation)
 # ==========================================
-rm -rf "$HOME_DIR/quiz10"
+clean_quiz_dir "$HOME_DIR/quiz10"
 mkdir -p "$HOME_DIR/quiz10"
 
 # Chalg'ituvchi arxiv 1

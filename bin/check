@@ -5,6 +5,8 @@
 #   check             <- ~/quizN/flag.txt faylidan o'qiydi
 #   check FLAG{...}   <- to'g'ridan-to'g'ri terminalda kiritish
 
+cd "/home/${SUDO_USER:-$(whoami)}" 2>/dev/null || cd /tmp
+
 if [ "$EUID" -ne 0 ]; then
     exec sudo /usr/local/bin/check "$@"
 fi

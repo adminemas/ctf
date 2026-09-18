@@ -7,6 +7,8 @@
 #   ctf-reset --all    <- Progressni 1-bosqichga nollaydi va boshidan boshlaydi
 #   ctf-reset <user>   <- Admin boshqa talabani reset qilishi uchun
 
+cd "/home/${SUDO_USER:-$(whoami)}" 2>/dev/null || cd /tmp
+
 if [ "$EUID" -ne 0 ]; then
     exec sudo /usr/local/bin/ctf-reset "$@"
 fi
