@@ -18,7 +18,7 @@ echo "╚═══════════════════════�
 # [1/6] Kerakli paketlarni tekshirish va o'rnatish
 echo "[1/6] Kerakli paketlar va xizmatlar tekshirilmoqda..."
 MISSING=0
-for cmd in sqlite3 openssl python3 git cron at column diff comm sed sort uniq cut; do
+for cmd in sqlite3 openssl python3 git cron at diff comm sed sort uniq cut; do
     if ! which "$cmd" &>/dev/null; then
         MISSING=1
         break

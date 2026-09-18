@@ -4,7 +4,7 @@ Ushbu platforma Linux asoslarini endigina tugatgan o'quvchilar va talabalar uchu
 
 Tizimda har bir bosqich uchun **yashiringan individual flag (`FLAG{...}`)** mavjud. Talabalar birinchi va ikkinchi versiyalardagi (v1 va v2) barcha muhim buyruqlarni chuqurlashtirilgan, lekin qiyinlashtirilmagan real ma'muriy stsenariylarda ishlatishadi.
 
-Shuningdek yangi qo'shilgan buyruqlar: **`apt`**, **`dpkg`**, **`git`**, **`at`**, **`crontab`**, **`sed`**, **`uniq`**, **`cut`**, **`diff`**, **`comm`**, **`sort`**, **`column`** to'liq qamrab olingan.
+Shuningdek yangi qo'shilgan buyruqlar: **`apt`**, **`dpkg`**, **`git`**, **`at`**, **`crontab`**, **`sed`**, **`uniq`**, **`cut`**, **`diff`**, **`comm`**, **`sort`** to'liq qamrab olingan.
 
 ---
 
@@ -35,7 +35,7 @@ ctf-v1/
     ├── quiz2_check.sh      ← 2-bosqich tekshiruvi (grep, cut, pipes)
     ├── quiz3_check.sh      ← 3-bosqich tekshiruvi (sort, uniq -u)
     ├── quiz4_check.sh      ← 4-bosqich tekshiruvi (diff, comm)
-    ├── quiz5_check.sh      ← 5-bosqich tekshiruvi (sed, column)
+    ├── quiz5_check.sh      ← 5-bosqich tekshiruvi (sed, cut)
     ├── quiz6_check.sh      ← 6-bosqich tekshiruvi (find, chmod)
     ├── quiz7_check.sh      ← 7-bosqich tekshiruvi (git log, git show, git diff)
     ├── quiz8_check.sh      ← 8-bosqich tekshiruvi (crontab, at)
@@ -55,7 +55,7 @@ Har bir talaba uchun har bir quizdagi flag unikal tarzda yaratiladi: `FLAG{quizN
 | **2** | `grep`, `cut`, pipes (`\|`) | `~/quiz2/.auth_stream.log` yashirin faylida 500 ta autentifikatsiya jurnali bor. Faqat bitta `FLAG_GRANTED` qatorida flag bor. | `grep "FLAG_GRANTED" .auth_stream.log \| cut -d'=' -f5` |
 | **3** | `sort`, `uniq -u`, pipes (`\|`) | `~/quiz3/.telemetry_stream.txt` faylida 1500 ta shovqin qatorlari takrorlangan. Faqat 1 dona unikal qator mavjud va u flag! | `sort .telemetry_stream.txt \| uniq -u` |
 | **4** | `diff`, `comm` | `firewall.conf` va yashirin `.firewall.conf.bak` fayllari solishtiriladi (diff/comm). Zaxiradagi yashirin qatorda flag bor. | `diff firewall.conf .firewall.conf.bak` yoki `comm -13` |
-| **5** | `sed`, `column` (`cumm`) | `.classified_accounts.db` faylida niqoblangan kalit mavjud. `column -t -s':'` bilan ko'rib, `sed` bilan niqob yechiladi. | `column -t -s':' .classified_accounts.db`, `sed` |
+| **5** | `sed`, `cut` | `.classified_registry.db` faylida niqoblangan kalit mavjud. `cut -d':' -f5` bilan 5-ustun ajratilib, `sed` bilan niqob yechiladi. | `cut -d':' -f5 .classified_registry.db`, `sed` |
 | **6** | `find`, `chmod`, `chown` | `backup_storage/` ichida yashirin `.vault_key.dat` fayli bor. Ruxsati `000` (qulflangan). Talaba uni topib `chmod 644` qiladi. | `find backup_storage/ -name ".*vault*"`, `chmod 644` |
 | **7** | `git` (`log`, `show`, `diff`) | `company-api` git repozitoriysida dasturchi maxfiy kalitni commit qilib, keyin o'chirib tashlagan. Tarix tahlil qilinadi. | `git log -p`, `git show HEAD~1`, `git diff HEAD~1` |
 | **8** | `crontab`, `at` | Tizimda foydalanuvchiga rejalashtirilgan cron vazifasi bor. Uning buyrug'i parametrlarida flag yashiringan. | `crontab -l`, `grep "FLAG"` |
@@ -74,7 +74,7 @@ sudo bash install.sh
 ```
 
 Bu buyruq:
-1. Kerakli paketlarni (`sqlite3`, `openssl`, `git`, `cron`, `at`, `column`, `diffutils`, `dpkg`) tekshiradi va sozlaydi.
+1. Kerakli paketlarni (`sqlite3`, `openssl`, `git`, `cron`, `at`, `diffutils`, `dpkg`) tekshiradi va sozlaydi.
 2. `/var/ctf/` papka tuzilishini va SQLite bazasini tayyorlaydi.
 3. `/usr/local/bin/` ga `check`, `status`, `ctf-admin`, `ctf-web`, `ctf-reset` buyruqlarini joylaydi.
 4. Talabalar uchun sudoers qoidalarini faollashtiradi.

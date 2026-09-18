@@ -53,7 +53,7 @@ FLAG1="FLAG{quiz1_hidden_vault_${SALT1}}"
 FLAG2="FLAG{quiz2_grep_cut_${SALT2}}"
 FLAG3="FLAG{quiz3_sort_uniq_${SALT3}}"
 FLAG4="FLAG{quiz4_diff_comm_${SALT4}}"
-FLAG5="FLAG{quiz5_sed_column_${SALT5}}"
+FLAG5="FLAG{quiz5_sed_cut_${SALT5}}"
 FLAG6="FLAG{quiz6_find_chmod_${SALT6}}"
 FLAG7="FLAG{quiz7_git_history_${SALT7}}"
 FLAG8="FLAG{quiz8_crontab_at_${SALT8}}"
@@ -101,7 +101,7 @@ Vazifangiz — kerakli ma'lumotni tahlil qilib, YASHIRINGAN FLAGni topish!
   │  2 │ grep, cut, pipes (|)        │ Autentifikatsiya oqimidan token ajratish │
   │  3 │ sort, uniq, pipes (|)       │ Minglab takrorlar orasidagi unikal signal│
   │  4 │ diff, comm                  │ Konfiguratsiya zaxiralaridagi farqlar    │
-  │  5 │ sed, column                 │ Niqoblangan kalit va formatlangan jadval │
+  │  5 │ sed, cut                    │ 5-ustunni ajratish va kalitni tiklash    │
   │  6 │ find, chmod, chown          │ Qulflangan yashirin faylni qidirish      │
   │  7 │ git (log, show, diff)       │ Git tarixida o'chirilgan maxfiy commit   │
   │  8 │ crontab, at                 │ Rejalashtirilgan cron vazifasidan flag   │
@@ -420,7 +420,7 @@ chown -R "$USERNAME:$USERNAME" "$HOME_DIR/quiz4"
 lock_dir "$HOME_DIR/quiz4"
 
 # ==========================================
-# QUIZ 5: sed, column (cumm)
+# QUIZ 5: sed, cut
 # ==========================================
 clean_quiz_dir "$HOME_DIR/quiz5"
 mkdir -p "$HOME_DIR/quiz5"
@@ -448,35 +448,36 @@ mkdir -p "$HOME_DIR/quiz5"
     echo "root:0:superuser:IT:SYS-SEC-991"
     echo "webadmin:1001:operator:DevOps:WEB-TOKEN-442"
     echo "db_auditor:1002:analyst:Finance:DB-HASH-771"
-    echo "sec_sentinel:1003:security:SOC:MASKEDFLAG--quiz5--sed--column--${SALT5}=="
+    echo "sec_sentinel:1003:security:SOC:MASKEDFLAG--quiz5--sed--cut--${SALT5}=="
     echo "net_engineer:1004:network:NOC:NET-CRED-120"
     echo "developer:1005:coder:Software:GIT-PUB-339"
 } > "$HOME_DIR/quiz5/.classified_registry.db"
 
 cat > "$HOME_DIR/quiz5/README.txt" <<'EOF'
 ====================================================================
-📌 QUIZ 5: Formatlangan jadval va Niqoblangan kalitni tiklash
+📌 QUIZ 5: Matn ustunlari va Niqoblangan kalitni tiklash
 ====================================================================
-🎯 Mavzular: sed, column (cumm), stream editor
+🎯 Mavzular: sed, cut, quvurlar (|)
 
 📝 Vazifa:
   Ushbu katalogda bir nechta yashirin tizim ma'lumotlar ro'yxatlari (.db fayllar) bor.
   Sizga maxfiy xavfsizlik registri — classified registry (.classified*) fayli kerak!
-  Undagi xodimlar va ularning maxfiy tokenlari saqlanadi.
+  Undagi xodimlar va ularning maxfiy tokenlari ikki nuqta (:) bilan ajratilgan.
 
   1) Yashirin fayllarni ko'ring (ls -la) va .classified* faylini aniqlang.
-  2) 'column -t -s\':\'' buyrug'i orqali ushbu faylni tartibli jadval shaklida o'qing.
-  3) Undagi 'MASKEDFLAG--...' niqoblangan kalitini toping.
-  4) Ushbu matnni 'sed' yordamida to'g'ri FLAG formatiga keltiring:
+  2) 'cut' buyrug'i yordamida ':' ajratuvchi bo'yicha 5-ustundagi
+     'MASKEDFLAG--...' niqoblangan kalitini ajratib oling.
+  3) Ajratib olingan matnni 'sed' yordamida to'g'ri FLAG formatiga keltiring:
      - 'MASKEDFLAG--' so'zini 'FLAG{' ga almashtirish
      - Barcha '--' belgilarini '_' (pastki chiziq) ga almashtirish
      - Oxiridagi '==' belgisini '}' ga almashtirish
-     Natijada to'liq flag hosil bo'lishi kerak!
+     Natijada: FLAG{quiz5_sed_cut_...} hosil bo'lishi kerak!
   4) Tayyor flagni 'flag.txt' ga yozing va 'check' buyrug'ini bering.
 
 💡 Buyruqlar sintaksisi va ma'lumot:
-  column -t -s':' <fayl>       — Ikki nuqta bilan ajratilgan ustunlarni tekis jadvalga aylantirish
-  sed 's/qidiruv/almashtirish/g' — Matndagi belgilarni yangisiga almashtirish
+  cut -d':' -f<ustun> <fayl>   — Belgilangan ajratuvchi bo'yicha ustunni ajratish
+  sed 's/eski/yangi/g'          — Matndagi belgilangan so'zlarni yangisiga almashtirish
+  buyruq1 | buyruq2             — Buyruqlarni quvur orqali birlashtirish
 
 ✅ Tekshirish:
   check

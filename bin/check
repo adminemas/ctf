@@ -169,7 +169,7 @@ else
                 2) echo "   Yashirin loglar orasidan kirish oqimini toping, 'FLAG_GRANTED' so'zini grep qilib, cut bilan ajrating." ;;
                 3) echo "   Telemetriya fayllarini saralab, 'sort <fayl> | uniq -u' bilan aynan bitta unikal qatorni toping." ;;
                 4) echo "   Original firewall.conf va yashirin zaxira nusxalarini 'diff <fayl1> <fayl2>' orqali solishtiring." ;;
-                5) echo "   Jadvalni 'column -t -s\':\'' bilan ko'ring va topilgan MASKEDFLAG kalitini 'sed' almashtirish buyrug'i bilan tuzating." ;;
+                5) echo "   Jadvaldan cut bilan 5-ustunni ajrating va topilgan MASKEDFLAG kalitini sed bilan to'g'rilang." ;;
                 6) echo "   'find backup_storage/ -name \".*\"' orqali yashirin fayllarni toping, ruxsati 000 bo'lganiga 'chmod 644' bering." ;;
                 7) echo "   'git log -p' yoki 'git show HEAD~1' orqali o'tmishdagi commitda dasturchi o'chirgan token satrini ko'ring." ;;
                 8) echo "   'crontab -l' buyrug'ini bering, rejalashtirilgan skriptning --token parametrini oling." ;;
@@ -183,7 +183,7 @@ else
                 2) echo "   Yo'nalish: grep 'FLAG_GRANTED' <kirish_logi> | cut -d'=' -f5" ;;
                 3) echo "   Yo'nalish: sort .sensor_telemetry.txt | uniq -u" ;;
                 4) echo "   Yo'nalish: diff -u firewall.conf <yashirin_zaxira> | grep 'AUDIT_BACKDOOR_KEY'" ;;
-                5) echo "   Yo'nalish: sed 's/MASKEDFLAG--/FLAG{/; s/--/_/g; s/==/}/' orqali kalitni to'g'rilang." ;;
+                5) echo "   Yo'nalish: cut -d':' -f5 .classified* | sed 's/MASKEDFLAG--/FLAG{/; s/--/_/g; s/==/}/'" ;;
                 6) echo "   Yo'nalish: find backup_storage -name \".vault_key.dat\" va chmod 644 <fayl> orqali o'qing." ;;
                 7) echo "   Yo'nalish: cd company-api && git log -p da 'SECRET_ADMIN_FLAG' qatorini ko'ring." ;;
                 8) echo "   Yo'nalish: crontab -l | grep 'FLAG{'" ;;

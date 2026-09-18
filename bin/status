@@ -63,8 +63,8 @@ case $STAGE in
        DESC="Shovqinli oqimlar orasidan yagona unikal flagni topish" ;;
     4) THEME="diff, comm"
        DESC="Konfiguratsiya zaxiralaridagi maxfiy o'zgarishni topish" ;;
-    5) THEME="sed, column"
-       DESC="Niqoblangan kalitni sed bilan FLAG formatiga keltirish" ;;
+    5) THEME="sed, cut, pipes (|)"
+       DESC="5-ustunni cut bilan ajratib, sed bilan flagni tiklash" ;;
     6) THEME="find, chmod, chown"
        DESC="Qulflangan (000) yashirin faylni topish va o'qish" ;;
     7) THEME="git (log, show, diff)"
