@@ -163,30 +163,30 @@ else
         if [ "$FAILS" -lt 4 ]; then
             echo "🔍 Maslahat (Hint - Yo'nalish):"
             case $STAGE in
-                1) echo "   'ls -la' bilan nuqtali yashirin papkani toping, ichiga kirib 'tail -n 30' bilan log oxirini tekshiring." ;;
-                2) echo "   'grep FLAG_GRANTED .auth_stream.log' qatorini topib, 'cut -d'=' -f5' orqali tokenni ajrating." ;;
-                3) echo "   'sort .telemetry_stream.txt | uniq -u' yordamida faqat bitta bo'lgan unikal qatorni toping." ;;
-                4) echo "   'diff firewall.conf .firewall.conf.bak' buyrug'ini bering, qo'shilgan flag qatori chiqadi." ;;
-                5) echo "   'column -t -s':' .classified_accounts.db' bilan ko'ring va 'sed' orqali MASKEDFLAG ni to'g'rilang." ;;
-                6) echo "   'find backup_storage/ -name \".*vault*\"' orqali faylni toping va 'chmod 644' bilan o'qish huquqi bering." ;;
-                7) echo "   'git log -p' yoki 'git show HEAD~1' orqali dasturchi o'chirib tashlagan sirli commitni ko'ring." ;;
-                8) echo "   'crontab -l' buyrug'ini bering, rejalashtirilgan cron skriptining --token parametrini oling." ;;
-                9) echo "   'dpkg -x .ctf-sec-package_1.0_all.deb extracted/' orqali deb paketni oching va doc ichidagi faylni o'qing." ;;
-               10) echo "   'tar -xzf .incident_dump.tar.gz' qiling, 'awk -F\',\' \'\$4==\"CRITICAL_BREACH\" {print \$5}\' incident/security_events.csv' qiling." ;;
+                1) echo "   'ls -la' bilan yashirin papkalarni ko'ring, audit papkasi ichidagi jurnalning oxirgi qismini 'tail' bilan tekshiring." ;;
+                2) echo "   Yashirin loglar orasidan kirish oqimini toping, 'FLAG_GRANTED' so'zini grep qilib, cut bilan ajrating." ;;
+                3) echo "   Telemetriya fayllarini saralab, 'sort <fayl> | uniq -u' bilan aynan bitta unikal qatorni toping." ;;
+                4) echo "   Original firewall.conf va yashirin zaxira nusxalarini 'diff <fayl1> <fayl2>' orqali solishtiring." ;;
+                5) echo "   Jadvalni 'column -t -s\':\'' bilan ko'ring va topilgan MASKEDFLAG kalitini 'sed' almashtirish buyrug'i bilan tuzating." ;;
+                6) echo "   'find backup_storage/ -name \".*\"' orqali yashirin fayllarni toping, ruxsati 000 bo'lganiga 'chmod 644' bering." ;;
+                7) echo "   'git log -p' yoki 'git show HEAD~1' orqali o'tmishdagi commitda dasturchi o'chirgan token satrini ko'ring." ;;
+                8) echo "   'crontab -l' buyrug'ini bering, rejalashtirilgan skriptning --token parametrini oling." ;;
+                9) echo "   'dpkg -c' bilan paketlar tarkibini ko'ring, sec-suite paketini 'dpkg -x <fayl> <papka>' qilib oching." ;;
+               10) echo "   Tergov arxivini 'tar -xzf' qilib oching, CSV fayldan 'CRITICAL_BREACH' qatorini awk orqali filtrlang." ;;
             esac
         else
-            echo "🔍 Sintaksis shabloni (${FAILS}-urinish):"
+            echo "🔍 Maslahat (${FAILS}-urinish — Qo'llanma):"
             case $STAGE in
-                1) echo "   cd ~/quiz1/.hidden_vault && tail -n 25 .syslog_audit.log | grep -o 'FLAG{[^}]*}' > ~/quiz1/flag.txt" ;;
-                2) echo "   grep 'FLAG_GRANTED' ~/quiz2/.auth_stream.log | cut -d'=' -f5 > ~/quiz2/flag.txt" ;;
-                3) echo "   sort ~/quiz3/.telemetry_stream.txt | uniq -u > ~/quiz3/flag.txt" ;;
-                4) echo "   diff ~/quiz4/firewall.conf ~/quiz4/.firewall.conf.bak | grep -o 'FLAG{[^}]*}' > ~/quiz4/flag.txt" ;;
-                5) echo "   grep 'MASKEDFLAG' ~/quiz5/.classified_accounts.db | cut -d':' -f5 | sed 's/MASKEDFLAG--/FLAG{/; s/--/_/g; s/==/}/' > ~/quiz5/flag.txt" ;;
-                6) echo "   F=\$(find ~/quiz6/backup_storage -name \".vault_key.dat\") && chmod 644 \"\$F\" && cat \"\$F\" > ~/quiz6/flag.txt" ;;
-                7) echo "   cd ~/quiz7/company-api && git show HEAD~1 | grep -o 'FLAG{[^}]*}' > ~/quiz7/flag.txt" ;;
-                8) echo "   crontab -l | grep -o 'FLAG{[^\"}]*}' > ~/quiz8/flag.txt" ;;
-                9) echo "   cd ~/quiz9 && dpkg -x .ctf-sec-package_1.0_all.deb ext/ && grep -o 'FLAG{[^}]*}' ext/usr/share/doc/ctf-sec-package/license_key.txt > flag.txt" ;;
-               10) echo "   cd ~/quiz10 && tar -xzf .incident_dump.tar.gz && awk -F',' '\$4==\"CRITICAL_BREACH\" {print \$5}' incident/security_events.csv > flag.txt" ;;
+                1) echo "   Yo'nalish: .audit_vault papkasiga o'ting va 'tail -n 25' orqali audit jurnalidan flagni oling." ;;
+                2) echo "   Yo'nalish: grep 'FLAG_GRANTED' <kirish_logi> | cut -d'=' -f5" ;;
+                3) echo "   Yo'nalish: sort .sensor_telemetry.txt | uniq -u" ;;
+                4) echo "   Yo'nalish: diff -u firewall.conf <yashirin_zaxira> | grep 'AUDIT_BACKDOOR_KEY'" ;;
+                5) echo "   Yo'nalish: sed 's/MASKEDFLAG--/FLAG{/; s/--/_/g; s/==/}/' orqali kalitni to'g'rilang." ;;
+                6) echo "   Yo'nalish: find backup_storage -name \".vault_key.dat\" va chmod 644 <fayl> orqali o'qing." ;;
+                7) echo "   Yo'nalish: cd company-api && git log -p da 'SECRET_ADMIN_FLAG' qatorini ko'ring." ;;
+                8) echo "   Yo'nalish: crontab -l | grep 'FLAG{'" ;;
+                9) echo "   Yo'nalish: dpkg -x .ctf-sec-suite_1.0_all.deb ext/ orqali ochib, doc papkasidagi kalitni o'qing." ;;
+               10) echo "   Yo'nalish: tar -xzf .incident_investigation.tar.gz && awk -F',' '\$4==\"CRITICAL_BREACH\" {print \$5}' incident/security_events.csv" ;;
             esac
         fi
     fi

@@ -1,33 +1,91 @@
 #!/bin/bash
-# /usr/local/bin/ctf-reset <username>
-# Talabaning progressini 1-bosqichga qaytaradi va quiz materiallarini qayta tiklaydi.
+# /usr/local/bin/ctf-reset [username | --all]
+# CTF quiz materiallarini yangilash yoki boshidan qayta boshlash.
+#
+# Foydalanish:
+#   ctf-reset          <- Joriy bosqich materiallarini yangilaydi (progress saqlanadi)
+#   ctf-reset --all    <- Progressni 1-bosqichga nollaydi va boshidan boshlaydi
+#   ctf-reset <user>   <- Admin boshqa talabani reset qilishi uchun
 
 if [ "$EUID" -ne 0 ]; then
-    echo "❌ Ushbu buyruqni root huquqi bilan ishlating: sudo ctf-reset <username>"
-    exit 1
-fi
-
-USERNAME=$1
-if [ -z "$USERNAME" ]; then
-    echo "Foydalanish: sudo ctf-reset <username>"
-    exit 1
+    exec sudo /usr/local/bin/ctf-reset "$@"
 fi
 
 DB="/var/ctf/ctf.db"
+CALLER_USER="${SUDO_USER:-$(whoami)}"
+TARGET_USER=""
+MODE="refresh"
 
-if [ ! -d "/home/$USERNAME" ]; then
-    echo "❌ Xato: /home/$USERNAME katalogi mavjud emas."
+# Parametrlarni tahlil qilish
+if [ "$1" = "--all" ] || [ "$1" = "-a" ]; then
+    TARGET_USER="$CALLER_USER"
+    MODE="all"
+elif [ -n "$1" ]; then
+    if id "$1" &>/dev/null; then
+        TARGET_USER="$1"
+        if [ "$2" = "--all" ]; then MODE="all"; fi
+    else
+        echo "❌ Foydalanuvchi topilmadi: $1"
+        exit 1
+    fi
+else
+    TARGET_USER="$CALLER_USER"
+    MODE="refresh"
+fi
+
+if [ -z "$TARGET_USER" ] || [ ! -d "/home/$TARGET_USER" ]; then
+    echo "❌ Xato: Foydalanuvchi katalogi topilmadi: /home/$TARGET_USER"
     exit 1
 fi
 
-echo "[i] $USERNAME uchun CTF holati nollanmoqda..."
-sqlite3 -cmd ".timeout 5000" "$DB" <<EOF
-UPDATE progress SET current_stage=1, updated_at=CURRENT_TIMESTAMP WHERE username='$USERNAME';
-DELETE FROM attempts WHERE username='$USERNAME';
-DELETE FROM solved_stages WHERE username='$USERNAME';
-DELETE FROM flags WHERE username='$USERNAME';
-EOF
+db_query() {
+    sqlite3 -cmd ".timeout 5000" "$DB" "$1"
+}
 
-bash /var/ctf/setup/generate_seed.sh "$USERNAME"
+CURRENT_STAGE=$(db_query "SELECT current_stage FROM progress WHERE username='$TARGET_USER';")
+[ -z "$CURRENT_STAGE" ] && CURRENT_STAGE=1
 
-echo "✅ $USERNAME qayta 1-bosqichga tiklandi!"
+echo "===================================================================="
+printf "  🔄 CTF RESET — Foydalanuvchi: %s\n" "$TARGET_USER"
+echo "===================================================================="
+
+if [ "$MODE" = "all" ]; then
+    echo "[i] Barcha natijalar va urinishlar 1-bosqichga nollanmoqda..."
+    db_query "UPDATE progress SET current_stage=1, updated_at=CURRENT_TIMESTAMP WHERE username='$TARGET_USER';"
+    db_query "DELETE FROM attempts WHERE username='$TARGET_USER';"
+    db_query "DELETE FROM solved_stages WHERE username='$TARGET_USER';"
+    db_query "DELETE FROM flags WHERE username='$TARGET_USER';"
+    CURRENT_STAGE=1
+else
+    echo "[i] Joriy progress saqlangan holda barcha quiz materiallari yangilanmoqda..."
+    echo "    (Siz hozir quiz${CURRENT_STAGE} dasiz)"
+fi
+
+# 10 ta quiz materiallarini va yashirin fayllarini qayta generatsiya qilish
+bash /var/ctf/setup/generate_seed.sh "$TARGET_USER"
+
+# Agar foydalanuvchi 1 dan katta bosqichda bo'lsa, o'tgan bosqichlarining qulfini ochish
+if [ "$CURRENT_STAGE" -gt 1 ]; then
+    for ((s=2; s<=CURRENT_STAGE && s<=10; s++)); do
+        SDIR="/home/$TARGET_USER/quiz${s}"
+        chmod 750 "$SDIR" 2>/dev/null || true
+        chown -R "$TARGET_USER:$TARGET_USER" "$SDIR" 2>/dev/null || true
+        # Quiz 6 dagi maxsus .vault_key.dat ruxsatini 000 saqlash
+        if [ "$s" -eq 6 ]; then
+            chmod 000 "$SDIR/backup_storage/db/archive/.vault_key.dat" 2>/dev/null || true
+        fi
+    done
+fi
+
+echo ""
+echo "✅ Yangilanish yakunlandi!"
+if [ "$MODE" = "all" ]; then
+    echo "  📍 Siz 1-bosqichdan boshlaysiz: cd ~/quiz1 && cat README.txt"
+else
+    echo "  📍 Sizning joriy bosqichingiz: quiz${CURRENT_STAGE}"
+    echo "  ➡️  cd ~/quiz${CURRENT_STAGE}"
+    echo "  📋 cat ~/quiz${CURRENT_STAGE}/README.txt"
+    echo ""
+    echo "💡 Agar butunlay 1-bosqichdan boshlashni xohlasangiz: ctf-reset --all"
+fi
+echo "===================================================================="
