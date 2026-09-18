@@ -1,0 +1,91 @@
+#!/bin/bash
+# /usr/local/bin/status
+# Talabaning joriy holati, topshirilgan flaglar va progress barini ko'rsatadi.
+
+if [ "$EUID" -ne 0 ]; then
+    exec sudo /usr/local/bin/status "$@"
+fi
+
+USERNAME=${SUDO_USER:-$(whoami)}
+DB="/var/ctf/ctf.db"
+
+if [[ ! "$USERNAME" =~ ^[a-z0-9_]+$ ]] || [ ! -d "/home/$USERNAME" ]; then
+    echo "❌ Xato: Yaroqsiz foydalanuvchi yoki uy katalogi topilmadi."
+    exit 1
+fi
+
+db_query() {
+    sqlite3 -cmd ".timeout 5000" "$DB" "$1"
+}
+
+# Monitoring
+db_query "UPDATE progress SET last_seen=CURRENT_TIMESTAMP WHERE username='$USERNAME';" 2>/dev/null || true
+db_query "UPDATE telegram_users SET last_ssh_seen=CURRENT_TIMESTAMP WHERE ssh_username='$USERNAME';" 2>/dev/null || true
+db_query "INSERT INTO ssh_activity (username, action, stage) SELECT '$USERNAME', 'status', current_stage FROM progress WHERE username='$USERNAME';" 2>/dev/null || true
+
+STAGE=$(db_query "SELECT current_stage FROM progress WHERE username='$USERNAME';")
+
+if [ -z "$STAGE" ]; then
+    echo "❌ Siz tizim bazasida topilmadingiz. O'qituvchiga murojaat qiling."
+    exit 1
+fi
+
+TOTAL_PASS=$(db_query "SELECT COUNT(*) FROM attempts WHERE username='$USERNAME' AND result='pass';")
+TOTAL_FAIL=$(db_query "SELECT COUNT(*) FROM attempts WHERE username='$USERNAME' AND result='fail';")
+
+echo ""
+echo "╔══════════════════════════════════════════════════════════════════╗"
+printf "║  📊 LINUX PRAKTIKUM CTF — Holat: %-31s ║\n" "$USERNAME"
+echo "╠══════════════════════════════════════════════════════════════════╣"
+
+if [ "$STAGE" -gt 10 ]; then
+    FLAG=$(db_query "SELECT flag FROM flags WHERE username='$USERNAME';")
+    echo "║  🏆 BARCHA 10 TA QUIZ MUVAFFAQIYATLI YAKUNLANDI!                 ║"
+    printf "║  ✅ Urinishlar: ✓%-4s ✗%-4s                                    ║\n" "$TOTAL_PASS" "$TOTAL_FAIL"
+    echo "╠══════════════════════════════════════════════════════════════════╣"
+    echo "║  🚩 Sizning Yakuniy Flagingiz:                                   ║"
+    printf "║  %-64s ║\n" "$FLAG"
+    echo "╚══════════════════════════════════════════════════════════════════╝"
+else
+    DONE=$((STAGE - 1))
+    REMAIN=$((10 - DONE))
+    BAR="["
+    for ((i=0; i<DONE; i++)); do BAR="${BAR}█"; done
+    for ((i=0; i<REMAIN; i++)); do BAR="${BAR}░"; done
+    BAR="${BAR}]"
+    PCT=$((DONE * 10))
+
+    printf "║  📍 Bosqich: quiz%-2s / 10                                        ║\n" "$STAGE"
+    printf "║  Progress:   %-12s %3s%%                                  ║\n" "$BAR" "$PCT"
+    printf "║  Urinishlar: ✓%-4s ✗%-4s                                        ║\n" "$TOTAL_PASS" "$TOTAL_FAIL"
+    echo "╠══════════════════════════════════════════════════════════════════╣"
+    echo "║  🏁 TOP SHIRILGAN FLAGLAR:                                       ║"
+
+    # Oldingi bosqichlarda topilgan flaglarni chiqarish
+    SOLVED_COUNT=0
+    while IFS='|' read -r s_stage s_flag; do
+        if [ -n "$s_stage" ]; then
+            printf "║   quiz%-2s: %-52s ║\n" "$s_stage" "$s_flag"
+            SOLVED_COUNT=$((SOLVED_COUNT + 1))
+        fi
+    done < <(sqlite3 -cmd ".timeout 5000" "$DB" "SELECT stage, flag FROM solved_stages WHERE username='$USERNAME' ORDER BY stage ASC;")
+
+    if [ "$SOLVED_COUNT" -eq 0 ]; then
+        echo "║   (Hozircha flaglar yo'q. Birinchi bosqichni bajaring!)         ║"
+    fi
+
+    echo "╠══════════════════════════════════════════════════════════════════╣"
+    echo "║  📋 JORIY VAZIFA QO'LLANMASI:                                    ║"
+    echo "╚══════════════════════════════════════════════════════════════════╝"
+    echo ""
+
+    README_FILE="/home/$USERNAME/quiz${STAGE}/README.txt"
+    if [ -f "$README_FILE" ]; then
+        if [ -L "$README_FILE" ]; then
+            echo "⚠️ README.txt fayli symlink bo'lishi mumkin emas."
+        else
+            sudo -u "$USERNAME" cat "$README_FILE" 2>/dev/null
+        fi
+    fi
+fi
+echo ""

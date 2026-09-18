@@ -1,0 +1,11 @@
+# CTF v1 gitignore
+__pycache__/
+*.pyc
+*.pyo
+*.swp
+*.swo
+*~
+created_students.txt
+created_students.csv
+backups/
+.DS_Store

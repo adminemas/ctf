@@ -1,0 +1,17 @@
+[Unit]
+Description=CTF v2 Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/ctf/bot
+# Python versiyasini avtomatik topish: 3.13 → 3.12 → 3 tartibida
+ExecStart=/bin/bash -c 'exec $(which python3.13 2>/dev/null || which python3.12 2>/dev/null || which python3) /var/ctf/bot/bot.py'
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

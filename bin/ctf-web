@@ -1,0 +1,16 @@
+#!/bin/bash
+# /usr/local/bin/ctf-web
+# Web monitoring serverini boshqarish
+
+if [ "$EUID" -ne 0 ]; then
+    exec sudo /usr/local/bin/ctf-web "$@"
+fi
+
+if [ -f /var/ctf/admin/server.py ]; then
+    exec python3 /var/ctf/admin/server.py "$@"
+elif [ -f "$(dirname "$0")/../admin/server.py" ]; then
+    exec python3 "$(dirname "$0")/../admin/server.py" "$@"
+else
+    echo "❌ Xato: /var/ctf/admin/server.py topilmadi."
+    exit 1
+fi

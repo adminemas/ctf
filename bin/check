@@ -1,0 +1,195 @@
+#!/bin/bash
+# /usr/local/bin/check
+# Talaba tomonidan flagni tekshirish uchun ishlatiladi.
+# Foydalanish:
+#   check             <- ~/quizN/flag.txt faylidan o'qiydi
+#   check FLAG{...}   <- to'g'ridan-to'g'ri terminalda kiritish
+
+if [ "$EUID" -ne 0 ]; then
+    exec sudo /usr/local/bin/check "$@"
+fi
+
+USERNAME=${SUDO_USER:-$(whoami)}
+DB="/var/ctf/ctf.db"
+
+# Foydalanuvchi nomini tekshirish (xavfsizlik)
+if [[ ! "$USERNAME" =~ ^[a-z0-9_]+$ ]] || [ ! -d "/home/$USERNAME" ]; then
+    echo "❌ Xato: Yaroqsiz foydalanuvchi yoki uy katalogi topilmadi."
+    exit 1
+fi
+
+db_query() {
+    sqlite3 -cmd ".timeout 5000" "$DB" "$1"
+}
+
+# Faollik monitoringi
+db_query "UPDATE progress SET last_seen=CURRENT_TIMESTAMP WHERE username='$USERNAME';" 2>/dev/null || true
+db_query "UPDATE telegram_users SET last_ssh_seen=CURRENT_TIMESTAMP WHERE ssh_username='$USERNAME';" 2>/dev/null || true
+
+STAGE=$(db_query "SELECT current_stage FROM progress WHERE username='$USERNAME';")
+
+if [ -z "$STAGE" ]; then
+    echo "❌ Xato: '$USERNAME' tizim bazasida topilmadi. O'qituvchiga murojaat qiling."
+    exit 1
+fi
+
+if [ "$STAGE" -gt 10 ]; then
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════════╗"
+    echo "║   🎉 SIZ ALLAQACHON BARCHA 10 TA QUIZNI MUVAJFAQ QILGANSIS!   ║"
+    echo "╚══════════════════════════════════════════════════════════════════╝"
+    FLAG=$(db_query "SELECT flag FROM flags WHERE username='$USERNAME';")
+    echo "  🚩 Yakuniy Sertifikat Flagingiz: $FLAG"
+    echo ""
+    exit 0
+fi
+
+TASK_SCRIPT="/var/ctf/tasks/quiz${STAGE}_check.sh"
+if [ ! -x "$TASK_SCRIPT" ]; then
+    echo "❌ Xato: quiz${STAGE} tekshiruv moduli topilmadi. O'qituvchiga murojaat qiling."
+    exit 1
+fi
+
+FLAG_ARG="$1"
+
+# Agar argument berilmagan bo'lsa, flag.txt yoki answer.txt faylidan o'qish
+if [ -z "$FLAG_ARG" ]; then
+    STAGE_DIR="/home/$USERNAME/quiz${STAGE}"
+    if [ -f "$STAGE_DIR/flag.txt" ] && [ ! -L "$STAGE_DIR/flag.txt" ]; then
+        FLAG_ARG=$(head -c 120 "$STAGE_DIR/flag.txt" | tr -d '[:space:]')
+    elif [ -f "$STAGE_DIR/answer.txt" ] && [ ! -L "$STAGE_DIR/answer.txt" ]; then
+        FLAG_ARG=$(head -c 120 "$STAGE_DIR/answer.txt" | tr -d '[:space:]')
+    fi
+fi
+
+if [ -z "$FLAG_ARG" ]; then
+    echo ""
+    echo "⚠️  Flag topilmadi!"
+    echo "Iltimos, topgan flagingizni ~/quiz${STAGE}/flag.txt fayliga yozing:"
+    echo "   echo \"FLAG{...}\" > ~/quiz${STAGE}/flag.txt"
+    echo "   check"
+    echo "Yoki to'g'ridan-to'g'ri terminalda kiriting:"
+    echo "   check FLAG{...}"
+    echo ""
+    exit 1
+fi
+
+# Tekshiruvni ishga tushirish
+"$TASK_SCRIPT" "$USERNAME" "$FLAG_ARG"
+RESULT=$?
+
+if [ "$RESULT" -eq 0 ]; then
+    # ---- TO'G'RI FLAG ----
+    db_query "INSERT INTO attempts (username, stage, flag_given, result) VALUES ('$USERNAME', $STAGE, '$FLAG_ARG', 'pass');"
+    db_query "INSERT INTO ssh_activity (username, action, stage) VALUES ('$USERNAME', 'check_pass', $STAGE);" 2>/dev/null || true
+    db_query "INSERT OR REPLACE INTO solved_stages (username, stage, flag) VALUES ('$USERNAME', $STAGE, '$FLAG_ARG');"
+
+    NEXT=$((STAGE + 1))
+
+    if [ "$NEXT" -le 10 ]; then
+        NEXT_DIR="/home/$USERNAME/quiz${NEXT}"
+        EXPECTED_CANONICAL="/home/$USERNAME/quiz${NEXT}"
+
+        # Agar papka tasodifan yo'qolgan bo'lsa qayta tiklash
+        if [ ! -d "$NEXT_DIR" ]; then
+            /var/ctf/setup/generate_seed.sh "$USERNAME" >/dev/null 2>&1 || true
+        fi
+
+        # Xavfsizlik: Symlink tekshiruvi
+        if [ -L "$NEXT_DIR" ]; then
+            echo "❌ Xavfsizlik xatosi: '$NEXT_DIR' symlink bo'lishi mumkin emas!"
+            exit 1
+        fi
+
+        REAL_PATH=$(realpath -q "$NEXT_DIR" 2>/dev/null || echo "")
+        if [ "$REAL_PATH" != "$EXPECTED_CANONICAL" ]; then
+            echo "❌ Xavfsizlik xatosi: Noto'g'ri katalog yo'li!"
+            exit 1
+        fi
+
+        # Ruxsatlarni berish (agar quiz6 bo'lsa, maxsus .vault_key.dat 000 bo'lib qolishi shart)
+        chmod 750 "$NEXT_DIR"
+        chown -h "$USERNAME:$USERNAME" "$NEXT_DIR"
+        find "$NEXT_DIR" -mindepth 1 -type d ! -type l -exec chmod 750 {} + -exec chown -h "$USERNAME:$USERNAME" {} + 2>/dev/null
+        find "$NEXT_DIR" -mindepth 1 -type f ! -type l -exec chown -h "$USERNAME:$USERNAME" {} + 2>/dev/null
+
+        # Quiz 6 dagi maxsus qulflangan faylni ruxsatsiz saqlash
+        if [ "$NEXT" -eq 6 ]; then
+            chmod 000 "$NEXT_DIR/backup_storage/db/archive/.vault_key.dat" 2>/dev/null || true
+        fi
+
+        db_query "UPDATE progress SET current_stage=$NEXT, updated_at=CURRENT_TIMESTAMP WHERE username='$USERNAME';"
+
+        echo ""
+        echo "╔══════════════════════════════════════════════════════════════════╗"
+        printf "║  ✅ TO'G'RI! Qabul qilindi: FLAG{...} (quiz%-2s yakunlandi!)      ║\n" "$STAGE"
+        printf "║  🔓 KEYINGI BOSQICH OCHILDI: quiz%-2s                              ║\n" "$NEXT"
+        echo "╚══════════════════════════════════════════════════════════════════╝"
+        echo ""
+        echo "  ➡️  cd ~/quiz${NEXT}"
+        echo "  📋 cat ~/quiz${NEXT}/README.txt"
+        echo ""
+    else
+        # BARCHA 10 TA BOSQICH YAKUNLANDI!
+        SECRET=$(cat /var/ctf/secret.key 2>/dev/null || echo "CTF_SECRET")
+        FINAL_FLAG="FLAG{CTF_LINUX_HERO_$(echo -n "${USERNAME}:${SECRET}:COMPLETED" | sha256sum | cut -c1-24)}"
+        db_query "INSERT OR REPLACE INTO flags (username, flag) VALUES ('$USERNAME', '$FINAL_FLAG');"
+        db_query "UPDATE progress SET current_stage=11, updated_at=CURRENT_TIMESTAMP WHERE username='$USERNAME';"
+
+        echo ""
+        echo "╔══════════════════════════════════════════════════════════════════════════╗"
+        echo "║  🏆🏆🏆 TABRIKLAYMIZ! BARCHA 10 TA BOSQICH TO'LIQ YAKUNLANDI! 🏆🏆🏆    ║"
+        echo "╠══════════════════════════════════════════════════════════════════════════╣"
+        echo "║  Siz barcha yashiringan flaglarni muvaffaqiyatli fosh etdingiz!          ║"
+        echo "║  Sizning yakuniy g'oliblik sertifikat kodingiz:                          ║"
+        echo "║                                                                          ║"
+        printf "║  %-71s ║\n" "$FINAL_FLAG"
+        echo "║                                                                          ║"
+        echo "╚══════════════════════════════════════════════════════════════════════════╝"
+        echo ""
+    fi
+else
+    # ---- NOTO'G'RI FLAG ----
+    db_query "INSERT INTO attempts (username, stage, flag_given, result) VALUES ('$USERNAME', $STAGE, '$FLAG_ARG', 'fail');"
+    db_query "INSERT INTO ssh_activity (username, action, stage) VALUES ('$USERNAME', 'check_fail', $STAGE);" 2>/dev/null || true
+    FAILS=$(db_query "SELECT COUNT(*) FROM attempts WHERE username='$USERNAME' AND stage=$STAGE AND result='fail';")
+
+    echo ""
+    echo "❌ Noto'g'ri flag yoki topshiriq to'liq bajarilmagan! (quiz${STAGE})"
+    echo "💡 Vazifa ko'rsatmasi: cat ~/quiz${STAGE}/README.txt"
+
+    if [ "$FAILS" -ge 2 ]; then
+        echo ""
+        if [ "$FAILS" -lt 4 ]; then
+            echo "🔍 Maslahat (Hint - Yo'nalish):"
+            case $STAGE in
+                1) echo "   'ls -la' bilan nuqtali yashirin papkani toping, ichiga kirib 'tail -n 30' bilan log oxirini tekshiring." ;;
+                2) echo "   'grep FLAG_GRANTED .auth_stream.log' qatorini topib, 'cut -d'=' -f5' orqali tokenni ajrating." ;;
+                3) echo "   'sort .telemetry_stream.txt | uniq -u' yordamida faqat bitta bo'lgan unikal qatorni toping." ;;
+                4) echo "   'diff firewall.conf .firewall.conf.bak' buyrug'ini bering, qo'shilgan flag qatori chiqadi." ;;
+                5) echo "   'column -t -s':' .classified_accounts.db' bilan ko'ring va 'sed' orqali MASKEDFLAG ni to'g'rilang." ;;
+                6) echo "   'find backup_storage/ -name \".*vault*\"' orqali faylni toping va 'chmod 644' bilan o'qish huquqi bering." ;;
+                7) echo "   'git log -p' yoki 'git show HEAD~1' orqali dasturchi o'chirib tashlagan sirli commitni ko'ring." ;;
+                8) echo "   'crontab -l' buyrug'ini bering, rejalashtirilgan cron skriptining --token parametrini oling." ;;
+                9) echo "   'dpkg -x .ctf-sec-package_1.0_all.deb extracted/' orqali deb paketni oching va doc ichidagi faylni o'qing." ;;
+               10) echo "   'tar -xzf .incident_dump.tar.gz' qiling, 'awk -F\',\' \'\$4==\"CRITICAL_BREACH\" {print \$5}\' incident/security_events.csv' qiling." ;;
+            esac
+        else
+            echo "🔍 Sintaksis shabloni (${FAILS}-urinish):"
+            case $STAGE in
+                1) echo "   cd ~/quiz1/.hidden_vault && tail -n 25 .syslog_audit.log | grep -o 'FLAG{[^}]*}' > ~/quiz1/flag.txt" ;;
+                2) echo "   grep 'FLAG_GRANTED' ~/quiz2/.auth_stream.log | cut -d'=' -f5 > ~/quiz2/flag.txt" ;;
+                3) echo "   sort ~/quiz3/.telemetry_stream.txt | uniq -u > ~/quiz3/flag.txt" ;;
+                4) echo "   diff ~/quiz4/firewall.conf ~/quiz4/.firewall.conf.bak | grep -o 'FLAG{[^}]*}' > ~/quiz4/flag.txt" ;;
+                5) echo "   grep 'MASKEDFLAG' ~/quiz5/.classified_accounts.db | cut -d':' -f5 | sed 's/MASKEDFLAG--/FLAG{/; s/--/_/g; s/==/}/' > ~/quiz5/flag.txt" ;;
+                6) echo "   F=\$(find ~/quiz6/backup_storage -name \".vault_key.dat\") && chmod 644 \"\$F\" && cat \"\$F\" > ~/quiz6/flag.txt" ;;
+                7) echo "   cd ~/quiz7/company-api && git show HEAD~1 | grep -o 'FLAG{[^}]*}' > ~/quiz7/flag.txt" ;;
+                8) echo "   crontab -l | grep -o 'FLAG{[^\"}]*}' > ~/quiz8/flag.txt" ;;
+                9) echo "   cd ~/quiz9 && dpkg -x .ctf-sec-package_1.0_all.deb ext/ && grep -o 'FLAG{[^}]*}' ext/usr/share/doc/ctf-sec-package/license_key.txt > flag.txt" ;;
+               10) echo "   cd ~/quiz10 && tar -xzf .incident_dump.tar.gz && awk -F',' '\$4==\"CRITICAL_BREACH\" {print \$5}' incident/security_events.csv > flag.txt" ;;
+            esac
+        fi
+    fi
+    echo ""
+    exit 1
+fi

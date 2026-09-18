@@ -1,0 +1,33 @@
+#!/bin/bash
+# /usr/local/bin/ctf-reset <username>
+# Talabaning progressini 1-bosqichga qaytaradi va quiz materiallarini qayta tiklaydi.
+
+if [ "$EUID" -ne 0 ]; then
+    echo "❌ Ushbu buyruqni root huquqi bilan ishlating: sudo ctf-reset <username>"
+    exit 1
+fi
+
+USERNAME=$1
+if [ -z "$USERNAME" ]; then
+    echo "Foydalanish: sudo ctf-reset <username>"
+    exit 1
+fi
+
+DB="/var/ctf/ctf.db"
+
+if [ ! -d "/home/$USERNAME" ]; then
+    echo "❌ Xato: /home/$USERNAME katalogi mavjud emas."
+    exit 1
+fi
+
+echo "[i] $USERNAME uchun CTF holati nollanmoqda..."
+sqlite3 -cmd ".timeout 5000" "$DB" <<EOF
+UPDATE progress SET current_stage=1, updated_at=CURRENT_TIMESTAMP WHERE username='$USERNAME';
+DELETE FROM attempts WHERE username='$USERNAME';
+DELETE FROM solved_stages WHERE username='$USERNAME';
+DELETE FROM flags WHERE username='$USERNAME';
+EOF
+
+bash /var/ctf/setup/generate_seed.sh "$USERNAME"
+
+echo "✅ $USERNAME qayta 1-bosqichga tiklandi!"

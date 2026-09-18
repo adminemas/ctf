@@ -1,0 +1,16 @@
+#!/bin/bash
+# /usr/local/bin/ctf-admin
+# Terminalda jonli monitoring dashboardini ochish
+
+if [ "$EUID" -ne 0 ]; then
+    exec sudo /usr/local/bin/ctf-admin "$@"
+fi
+
+if [ -f /var/ctf/admin/cli.py ]; then
+    exec python3 /var/ctf/admin/cli.py "$@"
+elif [ -f "$(dirname "$0")/../admin/cli.py" ]; then
+    exec python3 "$(dirname "$0")/../admin/cli.py" "$@"
+else
+    echo "❌ Xato: /var/ctf/admin/cli.py topilmadi."
+    exit 1
+fi

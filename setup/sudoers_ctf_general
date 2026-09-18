@@ -1,0 +1,5 @@
+# /etc/sudoers.d/ctf-general
+# Barcha CTF talabalari (ctfstudents guruhi) faqat check va status
+# buyruqlarini root nomidan, parolsiz ishga tushira oladi.
+
+%ctfstudents ALL=(root) NOPASSWD: /usr/local/bin/check, /usr/local/bin/status
