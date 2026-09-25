@@ -167,7 +167,9 @@ def get_progress(username):
     return p, fl, att
 
 def is_admin(uid):
-    return uid in ADMIN_IDS
+    if isinstance(ADMIN_IDS, (list, tuple, set)):
+        return uid in ADMIN_IDS or str(uid) in [str(x) for x in ADMIN_IDS]
+    return str(uid) == str(ADMIN_IDS)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # /start  —  faqat talaba oqimi (admin uchun /adminkubu)

@@ -32,10 +32,13 @@ if [ ! -f /var/ctf/ctf.db ]; then
     bash /opt/ctf/setup/init_db.sh
 fi
 
-# 4. Telegram Bot konfiguratsiyasi (Env orqali yoki mavjud fayl)
-if [ ! -f /var/ctf/bot/config.py ]; then
+# 4. Telegram Bot konfiguratsiyasi (Env orqali doim yangilanadi)
+if [ -n "$BOT_TOKEN" ] || [ ! -f /var/ctf/bot/config.py ]; then
     TOKEN="${BOT_TOKEN:-YOUR_BOT_TOKEN_HERE}"
     ADMINS="${ADMIN_IDS:-[]}"
+    if [[ ! "$ADMINS" =~ ^\[.*\]$ ]]; then
+        ADMINS="[$ADMINS]"
+    fi
     cat > /var/ctf/bot/config.py <<EOF
 BOT_TOKEN = "${TOKEN}"
 SERVER_IP = "auto"
