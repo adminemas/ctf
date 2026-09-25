@@ -11,6 +11,8 @@ import subprocess
 import re
 import random
 import os
+import io
+import csv
 from datetime import datetime
 
 from telegram import (
@@ -46,7 +48,8 @@ logger = logging.getLogger(__name__)
 
 # ─── Conversation holatlari ───────────────────────────────────────────────────
 (ASK_NAME, ASK_PHONE, MAIN_MENU, WAITING_FLAG,
- ADMIN_MENU, ADMIN_WAITING_USER, ADMIN_WAITING_MSG) = range(7)
+ ADMIN_MENU, ADMIN_WAITING_USER, ADMIN_WAITING_MSG,
+ ADMIN_ADD_STUDENTS, ADMIN_RESET_USER) = range(9)
 
 # ─── Doimiy klaviaturalar ─────────────────────────────────────────────────────
 MAIN_KB = ReplyKeyboardMarkup(
@@ -62,8 +65,10 @@ MAIN_KB = ReplyKeyboardMarkup(
 ADMIN_KB = ReplyKeyboardMarkup(
     [
         ["📊 Statistika", "🏆 Top-15"],
+        ["➕ Talaba qo'shish", "🔄 Talabani reset"],
         ["🔴 Qiynalganlar", "👤 User izlash"],
-        ["📢 Xabar yuborish"],
+        ["📥 CSV Hisobot", "📢 Xabar yuborish"],
+        ["⬅️ Chiqish"],
     ],
     resize_keyboard=True,
     is_persistent=True,
@@ -96,6 +101,28 @@ def get_server_ip():
         return ips[0] if ips else "127.0.0.1"
     except Exception:
         return "127.0.0.1"
+
+def get_ssh_connection_info(username=""):
+    domain = os.getenv("RAILWAY_TCP_PROXY_DOMAIN") or os.getenv("SSH_HOST") or os.getenv("TCP_PROXY_DOMAIN")
+    port   = os.getenv("RAILWAY_TCP_PROXY_PORT")   or os.getenv("SSH_PORT") or os.getenv("TCP_PROXY_PORT")
+
+    if domain and port:
+        cmd = f"ssh {username}@{domain} -p {port}" if username else f"ssh <user>@{domain} -p {port}"
+        return {
+            "host": domain,
+            "port": str(port),
+            "command": cmd,
+            "is_proxy": True
+        }
+
+    ip = get_server_ip()
+    cmd = f"ssh {username}@{ip}" if username else f"ssh <user>@{ip}"
+    return {
+        "host": ip,
+        "port": "22",
+        "command": cmd,
+        "is_proxy": False
+    }
 
 ADJECTIVES = ["Quick","Brave","Calm","Bold","Cool","Epic","Iron","Keen","Lean","Wild",
                "Fast","Dark","Wise","Pure","Gold","Blue","Red","Hot","Soft","Hard"]
@@ -151,15 +178,22 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ── Talaba: allaqachon ro'yxatdan o'tganmi? ──────────────────────────────
     row = get_user_by_tid(tid)
     if row:
-        ip = get_server_ip()
-        await update.message.reply_text(
+        conn_info = get_ssh_connection_info(row['ssh_username'])
+        msg = (
             "👋 Qayta xush kelibsiz!\n\n"
             "━━━━━━━━━━━━━━━━━━\n"
             f"👤 Username: `{row['ssh_username']}`\n"
             f"🔑 Parol:    `{row['ssh_password']}`\n"
-            f"🖥 IP:       `{ip}`\n"
+            f"🖥 Host:     `{conn_info['host']}`\n"
+            f"🔌 Port:     `{conn_info['port']}`\n"
             "━━━━━━━━━━━━━━━━━━\n\n"
-            "Quyidagi menyu orqali davom eting:",
+            f"💻 Ulanish: `{conn_info['command']}`\n\n"
+            "Quyidagi menyu orqali davom eting:"
+        )
+        if is_admin(tid):
+            msg += "\n\n💡 *Siz adminsiz!* Boshqaruv paneli uchun /admin bosing."
+        await update.message.reply_text(
+            msg,
             parse_mode="Markdown",
             reply_markup=MAIN_KB,
         )
@@ -276,15 +310,16 @@ async def got_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.commit()
     conn.close()
 
-    ip = get_server_ip()
+    conn_info = get_ssh_connection_info(ssh_username)
     await update.message.reply_text(
         "🎉 *Muvaffaqiyatli ro'yxatdan o'tdingiz!*\n\n"
         "━━━━━━━━━━━━━━━━━━\n"
         f"👤 Username: `{ssh_username}`\n"
         f"🔑 Parol:    `{ssh_password}`\n"
-        f"🖥 IP:       `{ip}`\n"
+        f"🖥 Host:     `{conn_info['host']}`\n"
+        f"🔌 Port:     `{conn_info['port']}`\n"
         "━━━━━━━━━━━━━━━━━━\n\n"
-        f"💻 Ulanish: `ssh {ssh_username}@{ip}`\n\n"
+        f"💻 Ulanish: `{conn_info['command']}`\n\n"
         "Ulangandan so'ng:\n"
         "▸ `status` — vazifani ko'rish\n"
         "▸ `check`  — javobni tekshirish\n\n"
@@ -724,6 +759,226 @@ async def btn_admin_broadcast_got(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_text(f"✅ Yuborildi: {sent}\n❌ Xato: {failed}", reply_markup=ADMIN_KB)
     return ADMIN_MENU
 
+# ─── Admin: Talaba qo'shish ─────────────────────────────────────────────────
+async def btn_admin_add_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "➕ *Talaba qo'shish*\n\n"
+        "Quyidagi formatlardan birini yuboring:\n\n"
+        "1️⃣ *Bitta talaba:*\n"
+        "   `ali` yoki `talaba1`\n\n"
+        "2️⃣ *Ommaviy talabalar:*\n"
+        "   `talaba 1 20` (nomi boshlanish tugash)\n\n"
+        "3️⃣ *Ommaviy umumiy parol bilan:*\n"
+        "   `talaba 1 20 Parol123`\n\n"
+        "Bekor qilish uchun ❌ bosing.",
+        parse_mode="Markdown",
+        reply_markup=CANCEL_KB,
+    )
+    return ADMIN_ADD_STUDENTS
+
+async def btn_admin_add_got(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    if text == "❌ Bekor qilish":
+        await update.message.reply_text("↩️ Bekor qilindi.", reply_markup=ADMIN_KB)
+        return ADMIN_MENU
+
+    parts = text.split()
+    created = []
+    conn_info = get_ssh_connection_info()
+
+    await update.message.reply_text("⏳ Talabalar yaratilmoqda, kuting...", reply_markup=ReplyKeyboardRemove())
+
+    try:
+        # Case 1: Range format (masalan: talaba 1 20 [password])
+        if len(parts) >= 3 and parts[1].isdigit() and parts[2].isdigit():
+            prefix = sanitize_username(parts[0]).replace("_ctf", "")
+            start_num = int(parts[1])
+            end_num = int(parts[2])
+            fixed_pass = parts[3] if len(parts) >= 4 else None
+
+            if end_num - start_num > 50:
+                await update.message.reply_text("❌ Bir martada ko'pi bilan 50 ta talaba qo'shish mumkin.", reply_markup=ADMIN_KB)
+                return ADMIN_MENU
+
+            for i in range(start_num, end_num + 1):
+                uname = f"{prefix}{i}"
+                pwd = fixed_pass if fixed_pass else generate_password()
+                
+                res = subprocess.run(
+                    ["sudo", "/var/ctf/setup/provision_user.sh", uname],
+                    input=f"{pwd}\n",
+                    capture_output=True, text=True, timeout=30
+                )
+                if res.returncode == 0:
+                    c = get_db()
+                    c.execute(
+                        "INSERT OR REPLACE INTO telegram_users (telegram_id, telegram_username, full_name, ssh_username, ssh_password) "
+                        "VALUES ((SELECT COALESCE(MIN(telegram_id),0)-1 FROM telegram_users WHERE telegram_id < 0), '', ?, ?, ?)",
+                        (f"Admin: {uname}", uname, pwd)
+                    )
+                    c.commit()
+                    c.close()
+                    created.append((uname, pwd))
+        else:
+            # Case 2: Bitta talaba (masalan: ali yoki talaba1)
+            raw_name = parts[0]
+            pwd = parts[1] if len(parts) >= 2 else generate_password()
+            uname = sanitize_username(raw_name)
+            uname = unique_username(uname)
+
+            res = subprocess.run(
+                ["sudo", "/var/ctf/setup/provision_user.sh", uname],
+                input=f"{pwd}\n",
+                capture_output=True, text=True, timeout=30
+            )
+            if res.returncode == 0:
+                c = get_db()
+                c.execute(
+                    "INSERT OR REPLACE INTO telegram_users (telegram_id, telegram_username, full_name, ssh_username, ssh_password) "
+                    "VALUES ((SELECT COALESCE(MIN(telegram_id),0)-1 FROM telegram_users WHERE telegram_id < 0), '', ?, ?, ?)",
+                    (f"Admin: {uname}", uname, pwd)
+                )
+                c.commit()
+                c.close()
+                created.append((uname, pwd))
+    except Exception as e:
+        logger.exception(e)
+        await update.message.reply_text(f"❌ Xatolik yuz berdi: {e}", reply_markup=ADMIN_KB)
+        return ADMIN_MENU
+
+    if not created:
+        await update.message.reply_text("❌ Foydalanuvchi yaratilmadi. Qaytadan urinib ko'ring.", reply_markup=ADMIN_KB)
+        return ADMIN_MENU
+
+    lines = [f"✅ *{len(created)} ta talaba muvaffaqiyatli yaratildi!*\n" + "━" * 26]
+    for u, p in created[:10]:
+        lines.append(f"👤 `{u}` | 🔑 `{p}`\n💻 `ssh {u}@{conn_info['host']} -p {conn_info['port']}`")
+
+    if len(created) > 10:
+        lines.append(f"\n...va yana {len(created)-10} ta talaba faylda yuborildi.")
+
+    await update.message.reply_text("\n\n".join(lines), parse_mode="Markdown", reply_markup=ADMIN_KB)
+
+    if len(created) > 3:
+        csv_buffer = io.StringIO()
+        csv_buffer.write("Username,Password,SSH_Command\n")
+        for u, p in created:
+            cmd = f"ssh {u}@{conn_info['host']} -p {conn_info['port']}"
+            csv_buffer.write(f"{u},{p},{cmd}\n")
+        
+        csv_buffer.seek(0)
+        bytes_io = io.BytesIO(csv_buffer.getvalue().encode('utf-8'))
+        bytes_io.name = f"talabalar_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        await context.bot.send_document(
+            chat_id=update.effective_chat.id,
+            document=bytes_io,
+            caption="📄 Yangi yaratilgan talabalar ro'yxati (CSV)"
+        )
+
+    return ADMIN_MENU
+
+# ─── Admin: Talabani reset qilish ───────────────────────────────────────────
+async def btn_admin_reset_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🔄 *Talabani qayta tiklash (Reset)*\n\n"
+        "Qayta boshlashi kerak bo'lgan talaba loginini kiriting (masalan: `talaba1`):\n\n"
+        "Bekor qilish uchun ❌ bosing.",
+        parse_mode="Markdown",
+        reply_markup=CANCEL_KB
+    )
+    return ADMIN_RESET_USER
+
+async def btn_admin_reset_got(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    if text == "❌ Bekor qilish":
+        await update.message.reply_text("↩️ Bekor qilindi.", reply_markup=ADMIN_KB)
+        return ADMIN_MENU
+
+    uname = text
+    conn = get_db()
+    p = conn.execute("SELECT current_stage FROM progress WHERE username=?", (uname,)).fetchone()
+    conn.close()
+
+    if not p:
+        await update.message.reply_text(f"❌ `{uname}` topilmadi. Qayta tekshiring.", parse_mode="Markdown", reply_markup=ADMIN_KB)
+        return ADMIN_MENU
+
+    try:
+        proc = subprocess.run(["sudo", "ctf-reset", uname], capture_output=True, text=True, timeout=30)
+        if proc.returncode == 0:
+            await update.message.reply_text(
+                f"✅ *{uname}* muvaffaqiyatli qayta tiklandi!\n\n"
+                f"Uning materiallari yangilandi va bosqichi qayta ochildi.",
+                parse_mode="Markdown",
+                reply_markup=ADMIN_KB
+            )
+        else:
+            await update.message.reply_text(f"⚠️ Natija: {proc.stdout or proc.stderr}", reply_markup=ADMIN_KB)
+    except Exception as e:
+        logger.exception(e)
+        await update.message.reply_text(f"❌ Xato: {e}", reply_markup=ADMIN_KB)
+
+    return ADMIN_MENU
+
+# ─── Admin: CSV Hisobot ───────────────────────────────────────────────────────
+async def btn_admin_export_csv(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("⏳ Hisobot tayyorlanmoqda...")
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT 
+            p.username,
+            p.current_stage,
+            CASE WHEN f.issued_at IS NOT NULL THEN 'Tugatgan' ELSE 'Jarayonda' END as status,
+            f.issued_at as completed_at,
+            (SELECT COUNT(*) FROM attempts a WHERE a.username=p.username AND a.result='pass') as pass_count,
+            (SELECT COUNT(*) FROM attempts a WHERE a.username=p.username AND a.result='fail') as fail_count,
+            t.full_name,
+            t.phone,
+            t.telegram_username,
+            t.registered_at
+        FROM progress p
+        LEFT JOIN flags f ON p.username=f.username
+        LEFT JOIN telegram_users t ON p.username=t.ssh_username
+        ORDER BY p.current_stage DESC, pass_count DESC
+    """).fetchall()
+    conn.close()
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["Username", "Joriy Bosqich", "Holat", "Tugatilgan Vaqt", "To'g'ri (Pass)", "Xato (Fail)", "Ism", "Telefon", "Telegram", "Ro'yxatdan o'tgan"])
+    
+    for r in rows:
+        writer.writerow([
+            r["username"],
+            f"Quiz {r['current_stage']}" if r["current_stage"] <= 10 else "Tugatgan (10/10)",
+            r["status"],
+            r["completed_at"] or "—",
+            r["pass_count"] or 0,
+            r["fail_count"] or 0,
+            r["full_name"] or "—",
+            r["phone"] or "—",
+            f"@{r['telegram_username']}" if r["telegram_username"] else "—",
+            r["registered_at"] or "—"
+        ])
+    
+    buffer.seek(0)
+    bytes_io = io.BytesIO(buffer.getvalue().encode('utf-8'))
+    bytes_io.name = f"ctf_natijalar_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+    await context.bot.send_document(
+        chat_id=update.effective_chat.id,
+        document=bytes_io,
+        caption="📊 Barcha talabalar natijalari hisoboti (CSV)",
+        reply_markup=ADMIN_KB
+    )
+    return ADMIN_MENU
+
+# ─── Admin: Chiqish ──────────────────────────────────────────────────────────
+async def btn_admin_exit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Asosiy menyuga qaytdingiz.", reply_markup=MAIN_KB)
+    return MAIN_MENU
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # SLASH KOMANDALAR (admin uchun ham ishlaydi)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -801,6 +1056,7 @@ def main():
     conv = ConversationHandler(
         entry_points=[
             CommandHandler("start",      cmd_start),
+            CommandHandler("admin",      cmd_admin_login),
             CommandHandler("adminkubu",  cmd_admin_login),  # Admin panel kirish
         ],
         states={
@@ -817,35 +1073,55 @@ def main():
                 MessageHandler(filters.Regex(r"^🏆 Reyting$"),           btn_leaderboard),
                 MessageHandler(filters.Regex(r"^🚩 Flag yuborish$"),      btn_flag_start),
                 MessageHandler(filters.Regex(r"^⏹ CTF ni to'xtatish$"), btn_stop),
+                CommandHandler("admin",      cmd_admin_login),
                 CommandHandler("adminkubu",  cmd_admin_login),
                 CommandHandler("cancel",     cmd_cancel),
             ],
             WAITING_FLAG: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, got_flag),
+                CommandHandler("admin",      cmd_admin_login),
                 CommandHandler("adminkubu",  cmd_admin_login),
             ],
             # ── Admin menyu ──────────────────────────────────────────────────
             ADMIN_MENU: [
                 MessageHandler(filters.Regex(r"^📊 Statistika$"),      btn_admin_stats),
                 MessageHandler(filters.Regex(r"^🏆 Top-15$"),          btn_admin_top),
+                MessageHandler(filters.Regex(r"^➕ Talaba qo'shish$"),  btn_admin_add_start),
+                MessageHandler(filters.Regex(r"^🔄 Talabani reset$"),   btn_admin_reset_start),
                 MessageHandler(filters.Regex(r"^🔴 Qiynalganlar$"),    btn_admin_stuck),
                 MessageHandler(filters.Regex(r"^👤 User izlash$"),      btn_admin_user_start),
+                MessageHandler(filters.Regex(r"^📥 CSV Hisobot$"),     btn_admin_export_csv),
                 MessageHandler(filters.Regex(r"^📢 Xabar yuborish$"),  btn_admin_broadcast_start),
+                MessageHandler(filters.Regex(r"^⬅️ Chiqish$"),         btn_admin_exit),
+                CommandHandler("admin",      cmd_admin_login),
                 CommandHandler("adminkubu",  cmd_admin_login),
                 CommandHandler("cancel",     cmd_cancel),
             ],
             ADMIN_WAITING_USER: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, btn_admin_user_got),
+                CommandHandler("admin",      cmd_admin_login),
                 CommandHandler("adminkubu",  cmd_admin_login),
             ],
             ADMIN_WAITING_MSG: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, btn_admin_broadcast_got),
+                CommandHandler("admin",      cmd_admin_login),
+                CommandHandler("adminkubu",  cmd_admin_login),
+            ],
+            ADMIN_ADD_STUDENTS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, btn_admin_add_got),
+                CommandHandler("admin",      cmd_admin_login),
+                CommandHandler("adminkubu",  cmd_admin_login),
+            ],
+            ADMIN_RESET_USER: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, btn_admin_reset_got),
+                CommandHandler("admin",      cmd_admin_login),
                 CommandHandler("adminkubu",  cmd_admin_login),
             ],
         },
         fallbacks=[
             CommandHandler("cancel",    cmd_cancel),
-            CommandHandler("adminkubu", cmd_admin_login),  # Har qanday holatda ishlaydi
+            CommandHandler("admin",     cmd_admin_login),
+            CommandHandler("adminkubu", cmd_admin_login),
         ],
         allow_reentry=True,
     )
@@ -853,6 +1129,7 @@ def main():
     app.add_handler(conv)
 
     # Slash komandalar (ham ishlaydi)
+    app.add_handler(CommandHandler("admin",      cmd_admin_login))
     app.add_handler(CommandHandler("astats",     cmd_astats))
     app.add_handler(CommandHandler("atop",       cmd_atop))
     app.add_handler(CommandHandler("astuck",     cmd_astuck))
