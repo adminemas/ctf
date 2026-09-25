@@ -7,7 +7,18 @@ echo "=========================================================="
 echo "🚀 Linux Praktikum CTF — Container ishga tushmoqda..."
 echo "=========================================================="
 
-mkdir -p /var/log/supervisor /var/run/sshd /var/ctf/backups /var/ctf/bot
+mkdir -p /var/log/supervisor /var/run/sshd /var/ctf/tasks /var/ctf/setup /var/ctf/admin /var/ctf/backups /var/ctf/bot
+
+# 0. Agar bo'sh volume ulangan bo'lsa, kerakli fayllarni /opt/ctf dan sinxronlash
+cp -rf /opt/ctf/tasks/* /var/ctf/tasks/ 2>/dev/null || true
+cp -rf /opt/ctf/setup/* /var/ctf/setup/ 2>/dev/null || true
+cp -rf /opt/ctf/admin/* /var/ctf/admin/ 2>/dev/null || true
+cp -rf /opt/ctf/bot/* /var/ctf/bot/ 2>/dev/null || true
+cp -rf /opt/ctf/bin/* /usr/local/bin/ 2>/dev/null || true
+
+chmod 700 /var/ctf/tasks/*.sh /var/ctf/setup/*.sh 2>/dev/null || true
+chmod 755 /var/ctf/admin/*.py 2>/dev/null || true
+chmod 755 /usr/local/bin/* 2>/dev/null || true
 
 # 1. SSH host kalitlarini generatsiya qilish (agar mavjud bo'lmasa)
 ssh-keygen -A
@@ -18,7 +29,7 @@ getent group ctfstudents >/dev/null || groupadd ctfstudents
 # 3. Bazani tekshirish va yaratish
 if [ ! -f /var/ctf/ctf.db ]; then
     echo "[i] Ma'lumotlar bazasi topilmadi. Yangi baza yaratilmoqda..."
-    bash /var/ctf/setup/init_db.sh
+    bash /opt/ctf/setup/init_db.sh
 fi
 
 # 4. Telegram Bot konfiguratsiyasi (Env orqali yoki mavjud fayl)
