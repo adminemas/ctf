@@ -9,3 +9,4 @@ created_students.txt
 created_students.csv
 backups/
 .DS_Store
+bot/config.py

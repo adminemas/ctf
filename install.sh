@@ -36,10 +36,14 @@ systemctl enable --now atd 2>/dev/null || true
 
 # [2/6] /var/ctf tuzilishi
 echo "[2/6] /var/ctf kataloglari yaratilmoqda..."
-mkdir -p /var/ctf/tasks /var/ctf/setup /var/ctf/admin /var/ctf/backups
+mkdir -p /var/ctf/tasks /var/ctf/setup /var/ctf/admin /var/ctf/backups /var/ctf/bot
 cp "$SCRIPT_DIR"/tasks/*.sh /var/ctf/tasks/
 cp "$SCRIPT_DIR"/setup/*.sh /var/ctf/setup/
 cp "$SCRIPT_DIR"/admin/*.py /var/ctf/admin/
+if [ -d "$SCRIPT_DIR/bot" ]; then
+    cp -r "$SCRIPT_DIR"/bot/* /var/ctf/bot/ 2>/dev/null || true
+    chmod 700 /var/ctf/bot/*.py 2>/dev/null || true
+fi
 
 chmod 700 /var/ctf/tasks/*.sh /var/ctf/setup/*.sh
 chmod 755 /var/ctf/admin/*.py
@@ -85,6 +89,14 @@ if [ ! -f /var/ctf/admin.cred ]; then
     echo "admin:$ADMIN_PASS" > /var/ctf/admin.cred
     chmod 600 /var/ctf/admin.cred
     echo "   🔑 Web Dashboard: Login: admin | Parol: $ADMIN_PASS"
+fi
+
+# Telegram Bot xizmati (agar config.py mavjud bo'lsa)
+if [ -f /var/ctf/bot/config.py ] && [ -f "$SCRIPT_DIR/bot/ctf-bot.service" ]; then
+    cp "$SCRIPT_DIR/bot/ctf-bot.service" /etc/systemd/system/ctf-bot.service
+    systemctl daemon-reload
+    systemctl enable --now ctf-bot 2>/dev/null || true
+    echo "   🤖 Telegram Bot: ctf-bot.service faollashtirildi"
 fi
 
 # [6/6] Tugatish xabari

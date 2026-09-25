@@ -110,8 +110,12 @@ fi
 
 if [ "$MODE" = "--all" ]; then
     echo "[i] Butun CTF tizimi o'chirilmoqda..."
-    # Web server to'xtatish
+    # Web server va Bot to'xtatish
     python3 /var/ctf/admin/server.py stop 2>/dev/null || true
+    systemctl stop ctf-bot 2>/dev/null || true
+    systemctl disable ctf-bot 2>/dev/null || true
+    rm -f /etc/systemd/system/ctf-bot.service
+    systemctl daemon-reload 2>/dev/null || true
 
     # Buyruqlarni olib tashlash
     rm -f /usr/local/bin/check /usr/local/bin/status /usr/local/bin/ctf-admin /usr/local/bin/ctf-web /usr/local/bin/ctf-reset

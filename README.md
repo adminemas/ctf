@@ -193,3 +193,27 @@ Admin paroli: `/var/ctf/admin.cred` faylida ko'rsatiladi.
   ```bash
   sudo bash uninstall.sh --all
   ```
+
+---
+
+## 🤖 8. Telegram Bot Bilan Ishlash (Ixtiyoriy)
+
+Platforma ikkala usulda ham to'liq ishlay oladi:
+
+### 1) Faqat Terminal orqali (Mustaqil / Offline rejim)
+Hech qanday bot shart emas. Admin talabalarni `add_students.sh` bilan qo'shadi, talabalar SSH orqali kirib `status` va `check` buyruqlari bilan topshiriqlarni bajaradi. O'qituvchi `ctf-admin` yoki `ctf-web` orqali kuzatadi.
+
+### 2) Telegram Bot orqali (Avtomatlashtirilgan rejim)
+Talabalar bot orqali ro'yxatdan o'tib, SSH login-parol oladi:
+1. `bot/config.example.py` ni nusxalang:
+   ```bash
+   cp bot/config.example.py bot/config.py
+   ```
+2. `bot/config.py` ga BotFather dan olingan `BOT_TOKEN` va o'z Telegram `ADMIN_IDS` ingizni yozing.
+3. Bot xizmatini ishga tushiring:
+   ```bash
+   sudo systemctl restart ctf-bot
+   ```
+4. Talaba botda `/start` bosib, ism va telefonini yuboradi. Bot avtomatik SSH hisob yaratib beradi.
+5. Botdagi imkoniyatlar: `📊 Holatim`, `🏆 Reyting`, `🚩 Flag yuborish`, Admin uchun `/adminkubu` paneli.
+
