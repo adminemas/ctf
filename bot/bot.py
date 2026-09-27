@@ -38,10 +38,23 @@ try:
     except ImportError:
         ADMIN_IDS = []
 except ImportError:
-    BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
-    SERVER_IP = os.getenv("SERVER_IP", "auto")
-    DB_PATH   = os.getenv("DB_PATH",   "/var/ctf/ctf.db")
+    BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
+    SERVER_IP = "auto"
+    DB_PATH   = "/var/ctf/ctf.db"
     ADMIN_IDS = []
+
+if os.getenv("BOT_TOKEN"):
+    BOT_TOKEN = os.getenv("BOT_TOKEN")
+if os.getenv("SERVER_IP"):
+    SERVER_IP = os.getenv("SERVER_IP")
+if os.getenv("DB_PATH"):
+    DB_PATH = os.getenv("DB_PATH")
+if os.getenv("ADMIN_IDS"):
+    import json
+    try:
+        ADMIN_IDS = json.loads(os.getenv("ADMIN_IDS"))
+    except Exception:
+        ADMIN_IDS = [x.strip() for x in os.getenv("ADMIN_IDS").split(",") if x.strip()]
 
 logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -142,11 +155,36 @@ def unique_username(base):
     conn = get_db()
     candidate = base
     i = 2
-    while conn.execute("SELECT 1 FROM telegram_users WHERE ssh_username=?", (candidate,)).fetchone():
+    import pwd
+    def user_exists(u):
+        if conn.execute("SELECT 1 FROM telegram_users WHERE ssh_username=?", (u,)).fetchone():
+            return True
+        try:
+            pwd.getpwnam(u)
+            return True
+        except KeyError:
+            return False
+
+    while user_exists(candidate):
         candidate = f"{base[:10]}_{i}"
         i += 1
     conn.close()
     return candidate
+
+def run_provision_user(username, password):
+    script_path = "/var/ctf/setup/provision_user.sh"
+    if not os.path.exists(script_path):
+        script_path = "/opt/ctf/setup/provision_user.sh"
+    cmd = [script_path, username, password]
+    if os.geteuid() != 0:
+        cmd = ["sudo", "-n"] + cmd
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+
+def run_ctf_reset(username):
+    cmd = ["ctf-reset", username]
+    if os.geteuid() != 0:
+        cmd = ["sudo", "-n"] + cmd
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
 def get_user_by_tid(tid):
     conn = get_db()
@@ -264,79 +302,103 @@ async def got_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return ASK_PHONE
 
-# ─── Kontakt keldi ────────────────────────────────────────────────────────────
+# ─── Telefon qabul qilish (kontakt yoki matn) ──────────────────────────────────
 async def got_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    contact   = update.message.contact
-    tid       = update.effective_user.id
-    tg_uname  = update.effective_user.username or ""
-    full_name = context.user_data.get("full_name", "user")
-    phone     = contact.phone_number
+    try:
+        tid       = update.effective_user.id
+        tg_uname  = update.effective_user.username or ""
+        full_name = context.user_data.get("full_name") or update.effective_user.full_name or "student"
 
-    existing = get_user_by_tid(tid)
-    if existing:
-        ip = get_server_ip()
+        # Telefon raqami: kontakt tugmasi orqali yoki matn sifatida
+        if update.message.contact:
+            phone = update.message.contact.phone_number
+        elif update.message.text:
+            raw = update.message.text.strip()
+            cleaned = re.sub(r"[^\d+]", "", raw)
+            if len(cleaned) < 7:
+                await update.message.reply_text(
+                    "❌ Telefon raqami noto'g'ri ko'rinadi.\n\n"
+                    "Iltimos, pastdagi tugmani bosing yoki raqamingizni to'liq kiriting (masalan: `+998901234567`):",
+                    parse_mode="Markdown",
+                    reply_markup=PHONE_KB,
+                )
+                return ASK_PHONE
+            phone = cleaned
+        else:
+            await update.message.reply_text(
+                "📱 Iltimos, telefon raqamingizni yuboring:",
+                reply_markup=PHONE_KB,
+            )
+            return ASK_PHONE
+
+        # Allaqachon ro'yxatdan o'tganmi?
+        existing = get_user_by_tid(tid)
+        if existing:
+            conn_info = get_ssh_connection_info(existing['ssh_username'])
+            await update.message.reply_text(
+                f"⚠️ Allaqachon ro'yxatdan o'tgansiz!\n\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"👤 Username: `{existing['ssh_username']}`\n"
+                f"🔑 Parol:    `{existing['ssh_password']}`\n"
+                f"🖥 Host:     `{conn_info['host']}`\n"
+                f"🔌 Port:     `{conn_info['port']}`\n"
+                f"━━━━━━━━━━━━━━━━━━\n\n"
+                f"💻 Ulanish: `{conn_info['command']}`",
+                parse_mode="Markdown",
+                reply_markup=MAIN_KB,
+            )
+            return MAIN_MENU
+
+        # Yangi talaba hisobi
+        ssh_username = unique_username(sanitize_username(full_name))
+        ssh_password = generate_password()
+
+        await update.message.reply_text("⏳ Akkaunt va CTF laboratoriyasi yaratilmoqda...", reply_markup=ReplyKeyboardRemove())
+
+        proc = run_provision_user(ssh_username, ssh_password)
+        if proc.returncode != 0:
+            logger.error(f"provision error ({proc.returncode}): {proc.stderr} | {proc.stdout}")
+            await update.message.reply_text(
+                f"❌ Akkaunt yaratishda texnik xato yuz berdi ({proc.returncode}). Iltimos, adminga murojaat qiling.",
+                reply_markup=MAIN_KB,
+            )
+            return ConversationHandler.END
+
+        conn = get_db()
+        conn.execute(
+            "INSERT OR REPLACE INTO telegram_users (telegram_id,telegram_username,full_name,phone,ssh_username,ssh_password)"
+            " VALUES (?,?,?,?,?,?)",
+            (tid, tg_uname, full_name, phone, ssh_username, ssh_password),
+        )
+        conn.commit()
+        conn.close()
+
+        conn_info = get_ssh_connection_info(ssh_username)
         await update.message.reply_text(
-            f"⚠️ Allaqachon ro'yxatdan o'tgansiz!\n\n"
-            f"👤 `{existing['ssh_username']}`\n🔑 `{existing['ssh_password']}`\n🖥 `{ip}`",
+            "🎉 *Muvaffaqiyatli ro'yxatdan o'tdingiz!*\n\n"
+            "━━━━━━━━━━━━━━━━━━\n"
+            f"👤 Username: `{ssh_username}`\n"
+            f"🔑 Parol:    `{ssh_password}`\n"
+            f"🖥 Host:     `{conn_info['host']}`\n"
+            f"🔌 Port:     `{conn_info['port']}`\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+            f"💻 Ulanish: `{conn_info['command']}`\n\n"
+            "Ulangandan so'ng:\n"
+            "▸ `status` — vazifani ko'rish\n"
+            "▸ `check`  — javobni tekshirish\n\n"
+            "Holatni quyidagi menyu orqali kuzating 👇",
             parse_mode="Markdown",
             reply_markup=MAIN_KB,
         )
         return MAIN_MENU
 
-    ssh_username = unique_username(sanitize_username(full_name))
-    ssh_password = generate_password()
-
-    await update.message.reply_text("⏳ Akkaunt yaratilmoqda...", reply_markup=ReplyKeyboardRemove())
-
-    try:
-        proc = subprocess.run(
-            ["sudo", "/var/ctf/setup/provision_user.sh", ssh_username],
-            input=f"{ssh_password}\n",
-            capture_output=True, text=True, timeout=60,
-        )
-        if proc.returncode != 0:
-            logger.error(f"provision error: {proc.stderr}")
-            await update.message.reply_text(f"❌ Texnik xato ({proc.returncode}). Admin bilan bog'laning.")
-            return ConversationHandler.END
     except Exception as e:
-        logger.exception(e)
-        await update.message.reply_text("❌ Xato yuz berdi. Admin bilan bog'laning.")
+        logger.exception("got_phone xatosi: %s", e)
+        await update.message.reply_text(
+            f"❌ Xatolik yuz berdi: {e}\nIltimos, qayta /start bosing yoki adminga murojaat qiling.",
+            reply_markup=MAIN_KB,
+        )
         return ConversationHandler.END
-
-    conn = get_db()
-    conn.execute(
-        "INSERT INTO telegram_users (telegram_id,telegram_username,full_name,phone,ssh_username,ssh_password)"
-        " VALUES (?,?,?,?,?,?)",
-        (tid, tg_uname, full_name, phone, ssh_username, ssh_password),
-    )
-    conn.commit()
-    conn.close()
-
-    conn_info = get_ssh_connection_info(ssh_username)
-    await update.message.reply_text(
-        "🎉 *Muvaffaqiyatli ro'yxatdan o'tdingiz!*\n\n"
-        "━━━━━━━━━━━━━━━━━━\n"
-        f"👤 Username: `{ssh_username}`\n"
-        f"🔑 Parol:    `{ssh_password}`\n"
-        f"🖥 Host:     `{conn_info['host']}`\n"
-        f"🔌 Port:     `{conn_info['port']}`\n"
-        "━━━━━━━━━━━━━━━━━━\n\n"
-        f"💻 Ulanish: `{conn_info['command']}`\n\n"
-        "Ulangandan so'ng:\n"
-        "▸ `status` — vazifani ko'rish\n"
-        "▸ `check`  — javobni tekshirish\n\n"
-        "Holatni quyidagi menyu orqali kuzating 👇",
-        parse_mode="Markdown",
-        reply_markup=MAIN_KB,
-    )
-    return MAIN_MENU
-
-# ─── Telefon o'rniga matn ────────────────────────────────────────────────────
-async def phone_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "📱 Iltimos, kontakt tugmasini bosing:", reply_markup=PHONE_KB
-    )
-    return ASK_PHONE
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TALABA TUGMALARI (MAIN_MENU state)
@@ -806,11 +868,7 @@ async def btn_admin_add_got(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 uname = f"{prefix}{i}"
                 pwd = fixed_pass if fixed_pass else generate_password()
                 
-                res = subprocess.run(
-                    ["sudo", "/var/ctf/setup/provision_user.sh", uname],
-                    input=f"{pwd}\n",
-                    capture_output=True, text=True, timeout=30
-                )
+                res = run_provision_user(uname, pwd)
                 if res.returncode == 0:
                     c = get_db()
                     c.execute(
@@ -828,11 +886,7 @@ async def btn_admin_add_got(update: Update, context: ContextTypes.DEFAULT_TYPE):
             uname = sanitize_username(raw_name)
             uname = unique_username(uname)
 
-            res = subprocess.run(
-                ["sudo", "/var/ctf/setup/provision_user.sh", uname],
-                input=f"{pwd}\n",
-                capture_output=True, text=True, timeout=30
-            )
+            res = run_provision_user(uname, pwd)
             if res.returncode == 0:
                 c = get_db()
                 c.execute(
@@ -906,7 +960,7 @@ async def btn_admin_reset_got(update: Update, context: ContextTypes.DEFAULT_TYPE
         return ADMIN_MENU
 
     try:
-        proc = subprocess.run(["sudo", "ctf-reset", uname], capture_output=True, text=True, timeout=30)
+        proc = run_ctf_reset(uname)
         if proc.returncode == 0:
             await update.message.reply_text(
                 f"✅ *{uname}* muvaffaqiyatli qayta tiklandi!\n\n"
@@ -1066,8 +1120,7 @@ def main():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, got_name),
             ],
             ASK_PHONE: [
-                MessageHandler(filters.CONTACT, got_phone),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, phone_reminder),
+                MessageHandler(filters.CONTACT | (filters.TEXT & ~filters.COMMAND), got_phone),
             ],
             # ── Talaba menyu ─────────────────────────────────────────────────
             MAIN_MENU: [
@@ -1138,6 +1191,19 @@ def main():
     app.add_handler(CommandHandler("auser",      cmd_auser))
     app.add_handler(CommandHandler("abroadcast", cmd_abroadcast))
     app.add_handler(CommandHandler("ahelp",      cmd_ahelp))
+
+    # Kutilmagan xatoliklarni ushlash va bot qotib qolmasligini ta'minlash
+    async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        logger.error("Global xatolik yuz berdi:", exc_info=context.error)
+        if isinstance(update, Update) and update.effective_message:
+            try:
+                await update.effective_message.reply_text(
+                    "⚠️ Botda kutilmagan texnik xatolik yuz berdi. Iltimos, /start bosing."
+                )
+            except Exception:
+                pass
+
+    app.add_error_handler(global_error_handler)
 
     logger.info("🤖 CTF Bot ishga tushdi (Button UI + Admin Panel)...")
     app.run_polling(drop_pending_updates=True)

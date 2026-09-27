@@ -64,7 +64,14 @@ printf "INSERT OR IGNORE INTO progress (username, current_stage) VALUES ('%s', 1
     | sqlite3 -cmd ".timeout 5000" /var/ctf/ctf.db
 
 # 2) 10 ta quiz materiallari va yashiringan flaglarni generatsiya qilish
-bash /var/ctf/setup/generate_seed.sh "$USERNAME"
+if [ -f /var/ctf/setup/generate_seed.sh ]; then
+    bash /var/ctf/setup/generate_seed.sh "$USERNAME"
+elif [ -f /opt/ctf/setup/generate_seed.sh ]; then
+    bash /opt/ctf/setup/generate_seed.sh "$USERNAME"
+else
+    echo "❌ Xato: generate_seed.sh skripti topilmadi!"
+    exit 1
+fi
 
 echo "[+] $USERNAME uchun CTF muhiti to'liq tayyorlandi!"
 echo "    Talaba kirishi: ssh $USERNAME@<server-ip>"
